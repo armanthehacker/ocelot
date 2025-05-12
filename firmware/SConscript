@@ -52,6 +52,11 @@ projects = {
   "startup": "startup_stm32f413xx.s",
   "flags": PROJECT_FLAGS_F4
   },
+  "vw_pla": {
+  "main": "vw_pla/main.c",
+  "startup": "startup_stm32f413xx.s",
+  "flags": PROJECT_FLAGS_F4
+  },
   "gpio_example": {
   "main": "gpio_example/main.c",
   "startup": "startup_stm32f413xx.s",
@@ -83,7 +88,7 @@ projects = {
   "flags": PROJECT_FLAGS_F4
   },
   "panda": {
-  "main": "panda/main.c",
+  "main": "main.c",
   "startup": "startup_stm32f413xx.s",
   "flags": [flag for flag in PROJECT_FLAGS_F4 if flag != "-DGATEWAY"]
   },
