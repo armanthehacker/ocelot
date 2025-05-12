@@ -249,6 +249,7 @@ void CAN2_SCE_IRQ_Handler(void) {
 }
 
 void CAN3_RX0_IRQ_Handler(void) {
+  // EPSCAN connects here
   while ((CAN3->RF0R & CAN_RF0R_FMP0) != 0) {
     #ifdef DEBUG_CAN
     uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
@@ -300,6 +301,19 @@ void set_led(uint8_t color, bool enabled) {
 }
 
 void loop(void) {
+    // useful for debugging, fade breaks = panda is overloaded
+  for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
+    set_led(LED_BLUE, true);
+    delay(fade >> 4);
+    set_led(LED_BLUE, false);
+    delay((MAX_FADE - fade) >> 4);
+  }
+  for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
+    set_led(LED_GREEN, true);
+    delay(fade >> 4);
+    set_led(LED_GREEN, false);
+    delay((MAX_FADE - fade) >> 4);
+  }
   watchdog_feed();
 }
 
@@ -381,23 +395,6 @@ int main(void) {
 
   puts("**** INTERRUPTS ON ****\n");
   enable_interrupts();
-
-  uint64_t cnt = 0;
-  for (cnt=0;;cnt++) {
-    // useful for debugging, fade breaks = panda is overloaded
-    for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
-      set_led(LED_BLUE, true);
-      delay(fade >> 4);
-      set_led(LED_BLUE, false);
-      delay((MAX_FADE - fade) >> 4);
-    }
-    for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
-      set_led(LED_GREEN, true);
-      delay(fade >> 4);
-      set_led(LED_GREEN, false);
-      delay((MAX_FADE - fade) >> 4);
-    }
-  }
 
   // main loop
   while (1) {
