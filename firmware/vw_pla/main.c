@@ -295,7 +295,6 @@ void set_led(uint8_t color, bool enabled) {
 uint8_t can1_count_out = 0;
 void TIM3_IRQ_Handler(void) {
   // cmain loop for sending 100hz messages
-  watchdog_feed();  // watchdog reset, move back into normal loop() after POC
   TIM3->SR = 0;
 }
 
@@ -315,6 +314,7 @@ void loop(void) {
     set_led(LED_GREEN, false);
     delay((MAX_FADE - fade) >> 4);
   }
+  //watchdog_feed();  // uncomment for production
 }
 
 int main(void) {
@@ -391,7 +391,7 @@ int main(void) {
   set_gpio_output_type(GPIOB, 0, OUTPUT_TYPE_PUSH_PULL);
   set_gpio_output(GPIOB, 0, 1);
 
-  watchdog_init();
+  //watchdog_init();  // uncomment for production
 
   puts("**** INTERRUPTS ON ****\n");
   enable_interrupts();
