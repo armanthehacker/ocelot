@@ -275,14 +275,6 @@ int to_signed(int d, int bits) {
   return d_signed;
 }
 
-uint8_t can1_count_out = 0;
-void TIM3_IRQ_Handler(void) {
-  // cmain loop for sending 100hz messages
-  TIM3->SR = 0;
-}
-
-// ***************************** main code *****************************
-
 #define MAX_FADE 8192U
 void set_led(uint8_t color, bool enabled) {
   switch (color){
@@ -300,8 +292,17 @@ void set_led(uint8_t color, bool enabled) {
   }
 }
 
+uint8_t can1_count_out = 0;
+void TIM3_IRQ_Handler(void) {
+  // cmain loop for sending 100hz messages
+  watchdog_feed();  // watchdog reset, move back into normal loop() after POC
+  TIM3->SR = 0;
+}
+
+// ***************************** main code *****************************
+
 void loop(void) {
-    // useful for debugging, fade breaks = panda is overloaded
+  // used for testing, remove for production
   for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
     set_led(LED_BLUE, true);
     delay(fade >> 4);
@@ -314,7 +315,6 @@ void loop(void) {
     set_led(LED_GREEN, false);
     delay((MAX_FADE - fade) >> 4);
   }
-  watchdog_feed();
 }
 
 int main(void) {
