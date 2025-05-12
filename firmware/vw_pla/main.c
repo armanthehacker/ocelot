@@ -191,7 +191,6 @@ bool sent;
 uint32_t timeout = 0;
 
 // fault states
-uint8_t state = 0;
 #define NO_FAULT 0U
 #define FAULT_BAD_CHECKSUM 1U
 #define FAULT_SEND 2U
@@ -200,6 +199,11 @@ uint8_t state = 0;
 #define FAULT_TIMEOUT 5U
 #define FAULT_INVALID 6U
 #define FAULT_COUNTER 7U
+
+uint8_t state = FAULT_STARTUP;
+
+const uint8_t crc_poly = 0x1D;  // standard crc8 SAE J1850
+uint8_t crc8_lut_1d[256];
 
 void CAN1_RX0_IRQ_Handler(void) {
   // PTCAN connects here
@@ -300,10 +304,13 @@ void loop(void) {
 }
 
 int main(void) {
-  // Init LED GPIOs
+  // Init LEDs
   set_gpio_mode(GPIOC, 9, MODE_OUTPUT);
   set_gpio_mode(GPIOC, 7, MODE_OUTPUT);
   set_gpio_mode(GPIOC, 6, MODE_OUTPUT);
+  set_gpio_output(GPIOC, 9, 1);
+  set_gpio_output(GPIOC, 7, 1);
+  set_gpio_output(GPIOC, 6, 1);
 
   // Init interrupt table
   init_interrupts(true);
@@ -378,14 +385,13 @@ int main(void) {
   uint64_t cnt = 0;
   for (cnt=0;;cnt++) {
     // useful for debugging, fade breaks = panda is overloaded
-    for(uint32_t fade = 0U; fade < MAX_FADE; fade += 1U){
+    for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
       set_led(LED_BLUE, true);
       delay(fade >> 4);
       set_led(LED_BLUE, false);
       delay((MAX_FADE - fade) >> 4);
     }
-
-    for(uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U){
+    for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
       set_led(LED_GREEN, true);
       delay(fade >> 4);
       set_led(LED_GREEN, false);
