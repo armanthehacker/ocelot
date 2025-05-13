@@ -1,13 +1,11 @@
 /*
 For PLA operation at all speeds on select VW models.
-Who can we thank for this? Why comma of course! What else are we to do when
-those germans made our EPS's violate the 2 givens from comma. The 2 sins if
-you will. What are they you ask? Here!
+The 3 sins of the VW EPS rack which have lead to this:
 1: Nonlinear feedforward response
 2: Speed dependant feedforward
+3: Poor lateral torque (HCA5)
 
-Our solution? Total anarchy. Spoofing speed to the EPS so we can get angle control.
-Is it safe? Arguably. Also arguably not. **Use this at your own discretion.**
+**Use this at your own discretion.**
 The EPS exits controls authoritatively if the driver grabs the wheel while in PLA operation.
 Considering a handshake (routine) is need to enter PLA, this makes using PLA "safe" in
 atleast some sense of the word.
@@ -251,10 +249,10 @@ void CAN1_RX0_IRQ_Handler(void) {
   while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
 
     CAN_FIFOMailBox_TypeDef to_fwd;
-    to_fwd.RIR = CAN1->sFIFOMailBox[0].RIR | 1; // TXQ
-    to_fwd.RDTR = CAN1->sFIFOMailBox[0].RDTR;
-    to_fwd.RDLR = CAN1->sFIFOMailBox[0].RDLR;
-    to_fwd.RDHR = CAN1->sFIFOMailBox[0].RDHR;
+    to_fwd.RIR = CAN1->sFIFOMailBox[0].RIR | 1;  /*!< CAN receive FIFO mailbox identifier register */
+    to_fwd.RDTR = CAN1->sFIFOMailBox[0].RDTR;    /*!< CAN receive FIFO mailbox data length control and time stamp register */
+    to_fwd.RDLR = CAN1->sFIFOMailBox[0].RDLR;    /*!< CAN receive FIFO mailbox data low register */
+    to_fwd.RDHR = CAN1->sFIFOMailBox[0].RDHR;    /*!< CAN receive FIFO mailbox data high register */
 
     uint32_t address = (CAN1->sFIFOMailBox[0].RIR >> 21);
     uint8_t ide = (CAN1->sFIFOMailBox[0].RIR >> 2) & 0x01;
@@ -268,10 +266,24 @@ void CAN1_RX0_IRQ_Handler(void) {
     puts("\n");
     #endif
 
+      // if PLA isnt seen for 0.5s filter force cancels
+    if (counter >= 20) {
+      filter = 0;
+      counter = 20;  // cap variable so we dont increment into infinity
+    }
+
     // CAN data buffer
     uint8_t dat[8];
 
     switch (address) {
+      case (PLA_1):
+        // toggle filter on when PLA RX is status 4, or 6
+        pla_stat = (GET_BYTE(to_fwd, 1) & 0b1111);
+        filter = (pla_stat == 4U || pla_stat == 6U);
+        break;
+      case (BREMSE_1):
+        filter ? to_fwd->RDLR &= 0x0000FFFF : (void)0;
+        break;
       default:
         // FWD as-is
         break;
