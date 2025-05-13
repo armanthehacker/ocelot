@@ -1,8 +1,20 @@
 /*
-CUSTOM gateway implementation for the RSG OFFROAD Tundra-swapped 4-runner.
-This board will convert the Toyota PTCAN signals to RetroPilot-compatible signals.
-Additionally, this board handles the cruise control switch functions. Hopefully, 
-it will also be able to switch "modes" by intercepting the stalk.
+For PLA operation at all speeds on select VW models.
+Who can we thank for this? Why comma of course! What else are we to do when
+those germans made our EPS's violate the 2 givens from comma. The 2 sins if
+you will. What are they you ask? Here!
+1: Nonlinear feedforward response
+2: Speed dependant feedforward
+
+Our solution? Total anarchy. Spoofing speed to the EPS so we can get angle control.
+Is it safe? Arguably. Also arguably not. **Use this at your own discretion.**
+The EPS exits controls authoritatively if the driver grabs the wheel while in PLA operation.
+Considering a handshake (routine) is need to enter PLA, this makes using PLA "safe" in
+atleast some sense of the word.
+
+On top of this OEM EPS safety, this module provides some other features.
+Such as, rate limits tied to speed, angle limits tied to speed, proper
+engagement behavior, timeouts, and signal integrity verification.
 */
 
 // ********************* Includes *********************
