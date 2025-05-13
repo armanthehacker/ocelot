@@ -31,6 +31,7 @@ it will also be able to switch "modes" by intercepting the stalk.
 
 #include "drivers/uart.h"
 #include "drivers/usb.h"
+#include <string.h>
 
 #define ENTER_BOOTLOADER_MAGIC 0xdeadbeef
 uint32_t enter_bootloader_mode;
@@ -205,18 +206,67 @@ uint8_t state = FAULT_STARTUP;
 const uint8_t crc_poly = 0x1D;  // standard crc8 SAE J1850
 uint8_t crc8_lut_1d[256];
 
+#define BUS_0 0  // car CAN
+#define BUS_1 1  // unused for now
+#define BUS_2 2  // EPS CAN
+
+#define PLA_1           0x3D4
+#define BREMSE_1        0x1A0
+#define BREMSE_3        0x4A0
+#define KOMBI_1         0x320
+#define GK_1            0x390
+
+bool filter;
+int counter;
+int pla_stat;
+
+/*
+msg name   signal name          B0-7  sb0-7  len1-X
+mBremse_1: BR1_Rad_kmh          2     1      15
+mBremse_3: BR3_Fahrtr_VL        0     0      1
+           BR3_Rad_kmh_VL       0     1      15
+           BR3_Fahrtr_VR        2     0      1
+           BR3_Rad_kmh_VR       2     1      15
+           BR3_Fahrtr_HL        4     0      1
+           BR3_Rad_kmh_HL       4     1      15
+           BR3_Fahrtr_HR        6     0      1
+           BR3_Rad_kmh_HR       6     1      15
+mKombi_1:  KO1_kmh              3     1      15
+*/
+
 void CAN1_RX0_IRQ_Handler(void) {
   // PTCAN connects here
   while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
-    uint16_t address = CAN1->sFIFOMailBox[0].RIR >> 21;
+
+    CAN_FIFOMailBox_TypeDef to_fwd;
+    to_fwd.RIR = CAN1->sFIFOMailBox[0].RIR | 1; // TXQ
+    to_fwd.RDTR = CAN1->sFIFOMailBox[0].RDTR;
+    to_fwd.RDLR = CAN1->sFIFOMailBox[0].RDLR;
+    to_fwd.RDHR = CAN1->sFIFOMailBox[0].RDHR;
+
+    uint32_t address = (CAN1->sFIFOMailBox[0].RIR >> 21);
+    uint8_t ide = (CAN1->sFIFOMailBox[0].RIR >> 2) & 0x01;
+    if(ide){
+      address = (CAN1->sFIFOMailBox[0].RIR >> 3);
+    }
+
     #ifdef DEBUG_CAN
-    puts("CAN2 RX: ");
+    puts("CAN1 RX: ");
     puth(address);
     puts("\n");
     #endif
-    switch (address) {  
-      default: ;
+
+    // CAN data buffer
+    uint8_t dat[8];
+
+    switch (address) {
+      default:
+        // FWD as-is
+        break;
     }
+    // send to CAN3
+    can_send(&to_fwd, 2, false);
+    // next
     can_rx(0);
   }
 }
@@ -251,12 +301,36 @@ void CAN2_SCE_IRQ_Handler(void) {
 void CAN3_RX0_IRQ_Handler(void) {
   // EPSCAN connects here
   while ((CAN3->RF0R & CAN_RF0R_FMP0) != 0) {
+
+    CAN_FIFOMailBox_TypeDef to_fwd;
+    to_fwd.RIR = CAN3->sFIFOMailBox[0].RIR | 1; // TXQ
+    to_fwd.RDTR = CAN3->sFIFOMailBox[0].RDTR;
+    to_fwd.RDLR = CAN3->sFIFOMailBox[0].RDLR;
+    to_fwd.RDHR = CAN3->sFIFOMailBox[0].RDHR;
+
+    uint32_t address = (CAN3->sFIFOMailBox[0].RIR >> 21);
+    uint8_t ide = (CAN3->sFIFOMailBox[0].RIR >> 2) & 0x01;
+    if(ide){
+      address = (CAN3->sFIFOMailBox[0].RIR >> 3);
+    }
+
     #ifdef DEBUG_CAN
-    uint16_t address = CAN3->sFIFOMailBox[0].RIR >> 21;
-    puts("CAN3 RX: ");
+    puts("CAN2 RX: ");
     puth(address);
     puts("\n");
     #endif
+
+    // CAN data buffer
+    uint8_t dat[8];
+
+    switch (address) {
+      default:
+        // FWD as-is
+        break;
+    }
+    // send to CAN1
+    can_send(&to_fwd, 0, false);
+    // next
     can_rx(2);
   }
 }
