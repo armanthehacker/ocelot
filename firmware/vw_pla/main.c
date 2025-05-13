@@ -271,9 +271,10 @@ void CAN1_RX0_IRQ_Handler(void) {
     switch (address) {
       case (PLA_1):
         // toggle filter on when PLA RX is status 4, or 6
-        pla_stat = (GET_BYTE(to_fwd, 1) & 0b1111);
+        pla_stat = (((to_fwd.RDLR >> (8U * (unsigned int)(1))) & 0xFFU) & 0b1111);  // make this neater
         filter = (pla_stat == 4U || pla_stat == 6U);
         break;
+        // explain what we are doing here
       case (BREMSE_1):
         filter ? to_fwd.RDLR &= 0x0000FFFF : (void)0;
         break;
