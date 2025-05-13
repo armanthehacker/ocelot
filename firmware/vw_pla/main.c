@@ -272,9 +272,6 @@ void CAN1_RX0_IRQ_Handler(void) {
       counter = 20;  // cap variable so we dont increment into infinity
     }
 
-    // CAN data buffer
-    uint8_t dat[8];
-
     switch (address) {
       case (PLA_1):
         // toggle filter on when PLA RX is status 4, or 6
@@ -282,7 +279,19 @@ void CAN1_RX0_IRQ_Handler(void) {
         filter = (pla_stat == 4U || pla_stat == 6U);
         break;
       case (BREMSE_1):
-        filter ? to_fwd->RDLR &= 0x0000FFFF : (void)0;
+        filter ? to_fwd.RDLR &= 0x0000FFFF : (void)0;
+        break;
+      case (BREMSE_3):
+        filter ? to_fwd.RDLR  = 0x00000000 : (void)0;
+        filter ? to_fwd.RDHR  = 0x00000000 : (void)0;
+        break;
+      case (KOMBI_1):
+        counter = filter ? 0 : counter + 1;
+        filter ? to_fwd.RDLR &= 0x01FFFFFF : (void)0;
+        filter ? to_fwd.RDHR &= 0xFFFFFF00 : (void)0;
+        break;
+      case (GK_1):
+        filter ? to_fwd.RDLR |= 0x00400000 : (void)0;
         break;
       default:
         // FWD as-is
@@ -343,9 +352,6 @@ void CAN3_RX0_IRQ_Handler(void) {
     puth(address);
     puts("\n");
     #endif
-
-    // CAN data buffer
-    uint8_t dat[8];
 
     switch (address) {
       default:
