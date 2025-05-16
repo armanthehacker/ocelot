@@ -52,11 +52,6 @@ projects = {
   "startup": "startup_stm32f413xx.s",
   "flags": PROJECT_FLAGS_F4
   },
-  "vw_pla": {
-  "main": "vw_pla/main.c",
-  "startup": "startup_stm32f413xx.s",
-  "flags": PROJECT_FLAGS_F4
-  },
   "gpio_example": {
   "main": "gpio_example/main.c",
   "startup": "startup_stm32f413xx.s",
@@ -94,6 +89,11 @@ projects = {
   },
   "sascm": {
   "main": "smart_ascm/main.c",
+  "startup": "startup_stm32f413xx.s",
+  "flags": PROJECT_FLAGS_F4
+  },
+  "vw_pla": {
+  "main": "vw_pla/main.c",
   "startup": "startup_stm32f413xx.s",
   "flags": PROJECT_FLAGS_F4
   }
