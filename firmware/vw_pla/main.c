@@ -226,20 +226,6 @@ bool filter;
 int counter;
 int pla_stat;
 
-/*
-msg name   signal name          B0-7  sb0-7  len1-X
-mBremse_1: BR1_Rad_kmh          2     1      15
-mBremse_3: BR3_Fahrtr_VL        0     0      1
-           BR3_Rad_kmh_VL       0     1      15
-           BR3_Fahrtr_VR        2     0      1
-           BR3_Rad_kmh_VR       2     1      15
-           BR3_Fahrtr_HL        4     0      1
-           BR3_Rad_kmh_HL       4     1      15
-           BR3_Fahrtr_HR        6     0      1
-           BR3_Rad_kmh_HR       6     1      15
-mKombi_1:  KO1_kmh              3     1      15
-*/
-
 void CAN1_RX0_IRQ_Handler(void) {
   // PTCAN connects here
   while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
@@ -271,23 +257,27 @@ void CAN1_RX0_IRQ_Handler(void) {
     switch (address) {
       case (PLA_1):
         // toggle filter on when PLA RX is status 4, or 6
-        pla_stat = (((to_fwd.RDLR >> (8U * (unsigned int)(1))) & 0xFFU) & 0b1111);  // make this neater
+        // make this neater, bitmasking the whole register then and op?
+        pla_stat = (((to_fwd.RDLR >> (8U * (unsigned int)(1))) & 0xFFU) & 0b1111);
         filter = (pla_stat == 4U || pla_stat == 6U);
         break;
-        // explain what we are doing here
       case (BREMSE_1):
+                    // set vEgo to 0
         filter ? to_fwd.RDLR &= 0x0000FFFF : (void)0;
         break;
       case (BREMSE_3):
+                    // set entire msg to 0, WSS's
         filter ? to_fwd.RDLR  = 0x00000000 : (void)0;
         filter ? to_fwd.RDHR  = 0x00000000 : (void)0;
         break;
       case (KOMBI_1):
         counter = filter ? 0 : counter + 1;
+                    // set cluster speed to 0
         filter ? to_fwd.RDLR &= 0x01FFFFFF : (void)0;
         filter ? to_fwd.RDHR &= 0xFFFFFF00 : (void)0;
         break;
       case (GK_1):
+                    // set BCM reverse light on
         filter ? to_fwd.RDLR |= 0x00400000 : (void)0;
         break;
       default:
