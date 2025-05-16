@@ -248,12 +248,6 @@ void CAN1_RX0_IRQ_Handler(void) {
     puts("\n");
     #endif
 
-      // if PLA isnt seen for 0.5s filter force cancels
-    if (counter >= 20) {
-      filter = 0;
-      counter = 20;  // cap variable so we dont increment into infinity
-    }
-
     switch (address) {
       case (PLA_1):
         // toggle filter on when PLA RX is status 4, or 6
@@ -339,6 +333,12 @@ void CAN3_RX0_IRQ_Handler(void) {
     puth(address);
     puts("\n");
     #endif
+
+      // if PLA isnt seen for 0.5s filter force cancels
+    if (counter >= 20) {
+      filter = 0;
+      counter = 20;  // cap variable so we dont increment into infinity
+    }
 
     switch (address) {
       default:
