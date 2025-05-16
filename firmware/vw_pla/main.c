@@ -255,6 +255,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         // make this neater, bitmasking the whole register then and op?
         pla_stat = (((to_fwd.RDLR >> (8U * (unsigned int)(1))) & 0xFFU) & 0b1111);
         filter = (pla_stat == 4U || pla_stat == 6U);
+        counter = 0;  // reset counter on RX of PLA
         break;
       case (BREMSE_1):
                     // set vEgo to 0
@@ -342,7 +343,7 @@ void CAN3_RX0_IRQ_Handler(void) {
 
     switch (address) {
       case (LENKHILFE_1):
-        counter = filter ? 0 : counter + 1;
+        counter = filter ? counter + 1 : 0;
         break;
       default:
         // FWD as-is
