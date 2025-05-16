@@ -336,6 +336,7 @@ void CAN3_RX0_IRQ_Handler(void) {
     #endif
 
       // if PLA isnt seen for 0.5s filter force cancels
+      // TODO: move this to the internal timer driven interrupt. CAN based is OK for POC
     if (counter >= 25) {
       filter = 0;
       counter = 25;  // cap variable so we dont increment into infinity
