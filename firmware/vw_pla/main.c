@@ -221,6 +221,7 @@ uint8_t crc8_lut_1d[256];
 #define BREMSE_3        0x4A0
 #define KOMBI_1         0x320
 #define GK_1            0x390
+#define LENKHILFE_1     0x3D0
 
 bool filter;
 int counter;
@@ -265,7 +266,6 @@ void CAN1_RX0_IRQ_Handler(void) {
         filter ? to_fwd.RDHR  = 0x00000000 : (void)0;
         break;
       case (KOMBI_1):
-        counter = filter ? 0 : counter + 1;
                     // set cluster speed to 0
         filter ? to_fwd.RDLR &= 0x01FFFFFF : (void)0;
         filter ? to_fwd.RDHR &= 0xFFFFFF00 : (void)0;
@@ -335,12 +335,15 @@ void CAN3_RX0_IRQ_Handler(void) {
     #endif
 
       // if PLA isnt seen for 0.5s filter force cancels
-    if (counter >= 20) {
+    if (counter >= 25) {
       filter = 0;
-      counter = 20;  // cap variable so we dont increment into infinity
+      counter = 25;  // cap variable so we dont increment into infinity
     }
 
     switch (address) {
+      case (LENKHILFE_1):
+        counter = filter ? 0 : counter + 1;
+        break;
       default:
         // FWD as-is
         break;
