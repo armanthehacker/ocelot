@@ -253,7 +253,7 @@ void CAN1_RX0_IRQ_Handler(void) {
       case (PLA_1):
         // toggle filter on when PLA RX is status 4, or 6
         // make this neater, bitmasking the whole register then and op?
-        pla_stat = (((to_fwd.RDLR >> (8U * (unsigned int)(1))) & 0xFFU) & 0b1111);
+        pla_stat = (((to_fwd.RDLR >> 12U) & 0xFU) & 0b1111);
         filter = (pla_stat == 4U || pla_stat == 6U);
         counter = 0;  // reset counter on RX of PLA
         break;
@@ -344,6 +344,7 @@ void CAN3_RX0_IRQ_Handler(void) {
 
     switch (address) {
       case (LENKHILFE_1):
+        filter ? to_fwd.RDLR = 0xB00B : (void)0;
         counter = filter ? counter + 1 : 0;
         break;
       default:
