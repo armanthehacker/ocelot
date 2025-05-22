@@ -223,9 +223,12 @@ uint8_t crc8_lut_1d[256];
 #define GK_1            0x390
 #define LENKHILFE_1     0x3D0
 
-bool filter;
-int counter;
+bool filter = false;
+int counter = 0;
 int pla_stat;
+uint32_t pla_rdlr;
+uint8_t *byte;
+uint8_t checksum = 0;
 
 void CAN1_RX0_IRQ_Handler(void) {
   // PTCAN connects here
@@ -254,15 +257,25 @@ void CAN1_RX0_IRQ_Handler(void) {
         // toggle filter on when PLA RX is status 4, or 6
         // make this neater, bitmasking the whole register then and op?
         pla_stat = (((to_fwd.RDLR >> 12U) & 0xFU) & 0b1111);
-        filter = (pla_stat == 4U || pla_stat == 6U);
+        filter = (pla_stat == 4U || pla_stat == 6U || pla_stat == 7U);
         counter = 0;  // reset counter on RX of PLA
+        // start filter on status 7 fwd PLA status of 8. pre-pre-entry request
+        if (pla_stat == 7U){
+          pla_rdlr = (to_fwd.RDLR & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
+          byte = (uint8_t *)&pla_rdlr;
+          checksum = 0;
+          for (int i = 1; i <= 3; i++) {
+            checksum ^= byte[i];
+          }
+          to_fwd.RDLR = pla_rdlr | checksum;
+        }
         break;
       case (BREMSE_1):
                     // set vEgo to 0
         filter ? to_fwd.RDLR &= 0x0000FFFF : (void)0;
         break;
       case (BREMSE_3):
-                    // set entire msg to 0, WSS's
+                    // set WSS's to 0
         filter ? to_fwd.RDLR  = 0x00000000 : (void)0;
         filter ? to_fwd.RDHR  = 0x00000000 : (void)0;
         break;
