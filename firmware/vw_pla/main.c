@@ -344,7 +344,6 @@ void CAN3_RX0_IRQ_Handler(void) {
 
     switch (address) {
       case (LENKHILFE_1):
-        filter ? to_fwd.RDLR = 0xB00B : (void)0;
         counter = filter ? counter + 1 : 0;
         break;
       default:
