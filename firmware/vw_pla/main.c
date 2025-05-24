@@ -227,7 +227,7 @@ bool filter = false;
 int counter = 0;
 int pla_stat;
 uint32_t pla_rdlr;
-uint8_t *byte;
+unsigned char *byte;
 uint8_t checksum = 0;
 
 void CAN1_RX0_IRQ_Handler(void) {
