@@ -228,7 +228,6 @@ int counter = 0;
 int pla_stat;
 uint32_t pla_rdlr;
 unsigned char *byte;
-uint8_t checksum = 0;
 
 void CAN1_RX0_IRQ_Handler(void) {
   // PTCAN connects here
@@ -263,11 +262,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         if (pla_stat == 7U){
           pla_rdlr = (to_fwd.RDLR & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
           byte = (uint8_t *)&pla_rdlr;
-          checksum = 0;
-          for (int i = 1; i <= 3; i++) {
-            checksum ^= byte[i];
-          }
-          to_fwd.RDLR = pla_rdlr | checksum;
+          to_fwd.RDLR = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
         }
         break;
       case (BREMSE_1):
