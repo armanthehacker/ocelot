@@ -264,8 +264,8 @@ void CAN1_RX0_IRQ_Handler(void) {
           pla_rdlr = (to_fwd.RDLR & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
           byte = (uint8_t *)&pla_rdlr;
           to_fwd.RDLR = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
-          pla_rdlr_eps = to_fwd.RDLR;
         }
+        pla_rdlr_eps = to_fwd.RDLR;
         break;
       case (BREMSE_1):
                     // set vEgo to 0
@@ -404,7 +404,8 @@ void TIM3_IRQ_Handler(void) {
   if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     CAN_FIFOMailBox_TypeDef to_send;
     to_send.RDLR = pla_rdlr_eps;
-    to_send.RDTR = filter ? 0xEFBEADDE : 0;
+    to_send.RDHR = filter ? 0xBEBAFECA : 0xEFBEADDE;
+    to_send.RDTR = 8;
     // debug CAN ID 0x2FF
     to_send.RIR = (0x2FF << 21) | 1U;
     // sending to bus 0 (powertrain)
