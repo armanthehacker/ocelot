@@ -227,6 +227,7 @@ bool filter = false;
 int counter = 0;
 int pla_stat;
 uint32_t pla_rdlr;
+uint32_t pla_rdlr_eps = 0;
 unsigned char *byte;
 
 void CAN1_RX0_IRQ_Handler(void) {
@@ -263,6 +264,7 @@ void CAN1_RX0_IRQ_Handler(void) {
           pla_rdlr = (to_fwd.RDLR & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
           byte = (uint8_t *)&pla_rdlr;
           to_fwd.RDLR = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
+          pla_rdlr_eps = to_fwd.RDLR;
         }
         break;
       case (BREMSE_1):
@@ -396,9 +398,18 @@ void set_led(uint8_t color, bool enabled) {
   }
 }
 
-uint8_t can1_count_out = 0;
 void TIM3_IRQ_Handler(void) {
   // cmain loop for sending 100hz messages
+  // below is a debug msg for the filter, checking operation
+  if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
+    CAN_FIFOMailBox_TypeDef to_send;
+    to_send.RDLR = pla_rdlr_eps;
+    to_send.RDTR = filter ? 0xEFBEADDE : 0;
+    // debug CAN ID 0x2FF
+    to_send.RIR = (0x2FF << 21) | 1U;
+    // sending to bus 0 (powertrain)
+    can_send(&to_send, 0, false);
+  }
   TIM3->SR = 0;
 }
 
