@@ -180,10 +180,6 @@ int usb_cb_control_msg(USB_Setup_TypeDef *setup, uint8_t *resp, bool hardwired) 
 }
 
 // ***************************** can port *****************************
-#define CAN_UPDATE  0x23F //bootloader
-#define COUNTER_CYCLE 0xFU
-#define LKA_COUNTER_CYCLE = 0x3FU
-
 void CAN1_TX_IRQ_Handler(void) {
   process_can(0);
 }
@@ -195,11 +191,6 @@ void CAN2_TX_IRQ_Handler(void) {
 void CAN3_TX_IRQ_Handler(void) {
   process_can(2);
 }
-
-bool sent;
-
-#define MAX_TIMEOUT 50U
-uint32_t timeout = 0;
 
 // fault states
 #define NO_FAULT 0U
@@ -430,6 +421,12 @@ void loop(void) {
     set_led(LED_GREEN, false);
     delay((MAX_FADE - fade) >> 4);
   }
+  if (state == FAULT_STARTUP || state == FAULT_SCE || state == NO_FAULT) {
+    state = NO_FAULT;
+    set_gpio_output(GPIOB, 0, 0);  // toggle relay, disconnecting EPS beginning filter
+  } else {
+    set_gpio_output(GPIOB, 0, 1);  // toggle relay, reconnecting EPS, ending filter
+  }
   //watchdog_feed();  // uncomment for production
 }
 
@@ -448,9 +445,9 @@ int main(void) {
   REGISTER_INTERRUPT(CAN1_TX_IRQn, CAN1_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
   REGISTER_INTERRUPT(CAN1_RX0_IRQn, CAN1_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
   REGISTER_INTERRUPT(CAN1_SCE_IRQn, CAN1_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_1)
-  REGISTER_INTERRUPT(CAN2_TX_IRQn, CAN2_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_2)
-  REGISTER_INTERRUPT(CAN2_RX0_IRQn, CAN2_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_2)
-  REGISTER_INTERRUPT(CAN2_SCE_IRQn, CAN2_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_2)
+  //REGISTER_INTERRUPT(CAN2_TX_IRQn, CAN2_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_2)
+  //REGISTER_INTERRUPT(CAN2_RX0_IRQn, CAN2_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_2)
+  //REGISTER_INTERRUPT(CAN2_SCE_IRQn, CAN2_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_2)
   REGISTER_INTERRUPT(CAN3_TX_IRQn, CAN3_TX_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_3)
   REGISTER_INTERRUPT(CAN3_RX0_IRQn, CAN3_RX0_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_3)
   REGISTER_INTERRUPT(CAN3_SCE_IRQn, CAN3_SCE_IRQ_Handler, CAN_INTERRUPT_RATE, FAULT_INTERRUPT_RATE_CAN_3)
