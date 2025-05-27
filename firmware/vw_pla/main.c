@@ -212,19 +212,15 @@ uint8_t crc8_lut_1d[256];
 #define BREMSE_3        0x4A0  // RX
 #define KOMBI_1         0x320  // RX
 #define GK_1            0x390  // RX
-#define LENKHILFE_1     0x3D0  // RX
 #define MESSAGE_1       0x2FF  // TX
 
 #define M1_CYCLE        0xFU
 
 bool filter = false;
 bool GK1_Rueckfahr;
-int counter = 0;
+uint8_t counter = 0;
 int pla_stat;
 uint8_t M1_counter = 0;
-uint32_t pla_rdlr;
-uint32_t pla_rdlr_eps = 0;
-unsigned char *byte;
 
 void CAN1_RX0_IRQ_Handler(void) {
   // PTCAN connects here
@@ -251,17 +247,9 @@ void CAN1_RX0_IRQ_Handler(void) {
     switch (address) {
       case (PLA_1):
         // toggle filter on when PLA RX is status 4, or 6
-        // make this neater, bitmasking the whole register then and op?
         pla_stat = (((to_fwd.RDLR >> 12U) & 0xFU) & 0b1111);
-        filter = (pla_stat == 4U || pla_stat == 6U || pla_stat == 7U);
+        filter = (pla_stat == 4U || pla_stat == 6U);
         counter = 0;  // reset counter on RX of PLA
-        // start filter on status 7 fwd PLA status of 8. pre-pre-entry request
-        if (pla_stat == 7U){
-          pla_rdlr = (to_fwd.RDLR & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
-          byte = (uint8_t *)&pla_rdlr;
-          to_fwd.RDLR = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
-        }
-        pla_rdlr_eps = to_fwd.RDLR;
         break;
       case (BREMSE_1):
                     // set vEgo to 0
@@ -342,17 +330,7 @@ void CAN3_RX0_IRQ_Handler(void) {
     puts("\n");
     #endif
 
-      // if PLA isnt seen for 0.5s filter force cancels
-      // TODO: move this to the internal timer driven interrupt. CAN based is OK for POC
-    if (counter >= 25) {
-      filter = 0;
-      counter = 25;  // cap variable so we dont increment into infinity
-    }
-
     switch (address) {
-      case (LENKHILFE_1):
-        counter = filter ? counter + 1 : 0;
-        break;
       default:
         // FWD as-is
         break;
@@ -396,14 +374,13 @@ void set_led(uint8_t color, bool enabled) {
 }
 
 void TIM3_IRQ_Handler(void) {
-  // cmain loop for sending 100hz messages
+  // cmain loop, 100hz
   // below is a debug msg for the filter, checking operation
   if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     CAN_FIFOMailBox_TypeDef to_send;
-    to_send.RDLR = pla_rdlr_eps;
-    to_send.RDHR = ((M1_counter & 0xFU) << 8U) | (GK1_Rueckfahr << 1U) | filter;
+    to_send.RDLR = 0xBEBAFECA;
+    to_send.RDHR = filter;
     to_send.RDTR = 8;
-    // debug CAN ID 0x2FF
     to_send.RIR = (MESSAGE_1 << 21) | 1U;
     // sending to bus 0 (powertrain)
     can_send(&to_send, 0, false);
@@ -411,6 +388,14 @@ void TIM3_IRQ_Handler(void) {
     M1_counter += 1;
     M1_counter &= M1_CYCLE;
   }
+
+    // if PLA isnt seen for 0.5s filter force cancels
+  if (counter >= 50) {
+    filter = 0;
+  }
+
+  counter += 1;
+  counter &= 50;
   TIM3->SR = 0;
 }
 
