@@ -207,16 +207,21 @@ uint8_t state = FAULT_STARTUP;
 const uint8_t crc_poly = 0x1D;  // standard crc8 SAE J1850
 uint8_t crc8_lut_1d[256];
 
-#define PLA_1           0x3D4
-#define BREMSE_1        0x1A0
-#define BREMSE_3        0x4A0
-#define KOMBI_1         0x320
-#define GK_1            0x390
-#define LENKHILFE_1     0x3D0
+#define PLA_1           0x3D4  // RX
+#define BREMSE_1        0x1A0  // RX
+#define BREMSE_3        0x4A0  // RX
+#define KOMBI_1         0x320  // RX
+#define GK_1            0x390  // RX
+#define LENKHILFE_1     0x3D0  // RX
+#define MESSAGE_1       0x2FF  // TX
+
+#define M1_CYCLE        0xFU
 
 bool filter = false;
+bool GK1_Rueckfahr;
 int counter = 0;
 int pla_stat;
+uint8_t M1_counter = 0;
 uint32_t pla_rdlr;
 uint32_t pla_rdlr_eps = 0;
 unsigned char *byte;
@@ -274,7 +279,8 @@ void CAN1_RX0_IRQ_Handler(void) {
         break;
       case (GK_1):
                     // set BCM reverse light on
-        filter ? to_fwd.RDLR |= 0x00400000 : (void)0;
+        filter ? to_fwd.RDLR |= 0x10000000 : (void)0;
+        GK1_Rueckfahr = (to_fwd.RDLR >> 28U) & 0x10;  // we want only the Rueckfahr
         break;
       default:
         // FWD as-is
@@ -395,12 +401,15 @@ void TIM3_IRQ_Handler(void) {
   if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
     CAN_FIFOMailBox_TypeDef to_send;
     to_send.RDLR = pla_rdlr_eps;
-    to_send.RDHR = filter ? 0xBEBAFECA : 0xEFBEADDE;
+    to_send.RDHR = ((M1_counter & 0xFU) << 8U) | (GK1_Rueckfahr << 1U) | filter;
     to_send.RDTR = 8;
     // debug CAN ID 0x2FF
-    to_send.RIR = (0x2FF << 21) | 1U;
+    to_send.RIR = (MESSAGE_1 << 21) | 1U;
     // sending to bus 0 (powertrain)
     can_send(&to_send, 0, false);
+
+    M1_counter += 1;
+    M1_counter &= M1_CYCLE;
   }
   TIM3->SR = 0;
 }
