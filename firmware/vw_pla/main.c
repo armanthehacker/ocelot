@@ -217,9 +217,8 @@ uint8_t crc8_lut_1d[256];
 #define M1_CYCLE        0xFU
 
 bool filter = false;
-bool GK1_Rueckfahr;
+uint8_t pla_stat;
 uint8_t counter = 0;
-int pla_stat;
 uint8_t M1_counter = 0;
 
 void CAN1_RX0_IRQ_Handler(void) {
@@ -268,7 +267,6 @@ void CAN1_RX0_IRQ_Handler(void) {
       case (GK_1):
                     // set BCM reverse light on
         filter ? to_fwd.RDLR |= 0x10000000 : (void)0;
-        GK1_Rueckfahr = (to_fwd.RDLR >> 28U) & 0x10;  // we want only the Rueckfahr
         break;
       default:
         // FWD as-is
