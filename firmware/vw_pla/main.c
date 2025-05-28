@@ -212,6 +212,7 @@ uint8_t crc8_lut_1d[256];
 #define BREMSE_3        0x4A0  // RX
 #define KOMBI_1         0x320  // RX
 #define GK_1            0x390  // RX
+#define LENKHILFE_2     0x3D2  // RX
 #define MESSAGE_1       0x2FF  // TX
 
 #define M1_CYCLE        0xFU
@@ -219,12 +220,15 @@ uint8_t crc8_lut_1d[256];
 bool filter = false;
 bool pla_counter_fault = false;
 bool pla_checksum_fault = false;
-bool pla_rx_fault = false;
+bool pla_exit = false;
+bool pla_override = false;
 uint8_t pla_stat;
 uint8_t pla_checksum;
 uint8_t pla_rx_counter = 0;
 uint8_t pla_wd_counter = 0;
 uint8_t M1_counter = 0;
+uint32_t pla_rdlr;
+uint64_t msg = 0;
 unsigned char *byte;
 
 void CAN1_RX0_IRQ_Handler(void) {
@@ -256,9 +260,15 @@ void CAN1_RX0_IRQ_Handler(void) {
         pla_counter_fault = !((byte[1] & 0xFU) == ((pla_rx_counter + 1) & 0xFU));
         pla_checksum_fault = !((byte[0] & 0xFFU) == (byte[1] ^ byte[2] ^ byte[3]));
 
-        pla_rx_fault = pla_counter_fault || pla_checksum_fault;
+        pla_exit = pla_counter_fault || pla_checksum_fault || pla_override;
         pla_stat = ((byte[1] >> 4U) & 0b1111);
-        filter = ((pla_stat == 4U || pla_stat == 6U) && !pla_rx_fault);
+        filter = ((pla_stat == 4U || pla_stat == 6U) && !pla_exit);
+        if (pla_override && pla_stat == 9U){
+          pla_rdlr = (to_fwd.RDLR & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
+          byte = (uint8_t *)&pla_rdlr;
+          to_fwd.RDLR = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
+          pla_override = false;
+        }
         pla_rx_counter = (byte[1] & 0xFU);
         pla_wd_counter = 0;  // reset exit counter on RX of PLA
         break;
@@ -349,6 +359,17 @@ void CAN3_RX0_IRQ_Handler(void) {
     #endif
 
     switch (address) {
+      case (LENKHILFE_2):
+                          // if LH2_PLA_Abbr == 2 latch override on
+        pla_override = ((to_fwd.RDHR >> 20U) == 2U) || pla_override;
+        if (pla_override) {
+          to_fwd.RDHR = (to_fwd.RDHR & 0x0FFFFF) | 0x200000;
+          msg = to_fwd.RDLR;
+          msg = (msg << 32U) | to_fwd.RDHR;
+          byte = (uint8_t *)&msg;
+          to_fwd.RDLR = (to_fwd.RDLR & 0xFFFFFF00) | byte[1] ^ byte[2] ^ byte[3] ^ byte[4] ^ byte[5] ^ byte[6];
+        }
+        break;
       default:
         // FWD as-is
         break;
