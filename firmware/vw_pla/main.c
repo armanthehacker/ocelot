@@ -217,9 +217,15 @@ uint8_t crc8_lut_1d[256];
 #define M1_CYCLE        0xFU
 
 bool filter = false;
+bool pla_counter_fault = false;
+bool pla_checksum_fault = false;
+bool pla_rx_fault = false;
 uint8_t pla_stat;
-uint8_t counter = 0;
+uint8_t pla_checksum;
+uint8_t pla_rx_counter = 0;
+uint8_t pla_wd_counter = 0;
 uint8_t M1_counter = 0;
+unsigned char *byte;
 
 void CAN1_RX0_IRQ_Handler(void) {
   // PTCAN connects here
@@ -246,9 +252,15 @@ void CAN1_RX0_IRQ_Handler(void) {
     switch (address) {
       case (PLA_1):
         // toggle filter on when PLA RX is status 4, or 6
-        pla_stat = (((to_fwd.RDLR >> 12U) & 0xFU) & 0b1111);
-        filter = (pla_stat == 4U || pla_stat == 6U);
-        counter = 0;  // reset counter on RX of PLA
+        byte = (uint8_t *)&to_fwd.RDLR;
+        (byte[1] & 0xFU) == ((pla_rx_counter + 1) &= 0xFU) ? pla_counter_fault = false : pla_counter_fault = true;
+        (byte[0] & 0xFFU) == (byte[1] ^ byte[2] ^ byte[3]) ? pla_checksum_fault = false : pla_checksum_fault = true;
+
+        pla_rx_fault = pla_counter_fault || pla_checksum_fault;
+        pla_stat = ((byte[1] >> 4U) & 0b1111);
+        filter = ((pla_stat == 4U || pla_stat == 6U) && !pla_rx_fault);
+        pla_rx_counter = (byte[1] & 0xFU);
+        pla_wd_counter = 0;  // reset exit counter on RX of PLA
         break;
       case (BREMSE_1):
                     // set vEgo to 0
@@ -388,12 +400,12 @@ void TIM3_IRQ_Handler(void) {
   }
 
     // if PLA isnt seen for 0.5s filter force cancels
-  if (counter >= 50) {
+  if (pla_wd_counter >= 50) {
     filter = 0;
   }
 
-  counter += 1;
-  counter &= 50;
+  pla_wd_counter += 1;
+  pla_wd_counter &= 50;
   TIM3->SR = 0;
 }
 
