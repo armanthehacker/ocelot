@@ -217,6 +217,8 @@ uint8_t crc8_lut_1d[256];
 
 #define M1_CYCLE        0xFU
 
+#define PLA_RX_ANGLE    (pla_rdlr >> 16U) & 0x7FFF
+
 bool filter = false;
 bool pla_counter_fault = false;
 bool pla_checksum_fault = false;
@@ -227,9 +229,45 @@ uint8_t pla_checksum;
 uint8_t pla_rx_counter = 0;
 uint8_t pla_wd_counter = 0;
 uint8_t M1_counter = 0;
+uint16_t pla_angle = 0;
+uint16_t pla_angle_limit = 0;
+uint16_t pla_rate_limit = 0;
+uint16_t vego = 0;
 uint32_t pla_rdlr;
 uint64_t msg = 0;
 unsigned char *byte;
+
+int min(int a, int b) {
+  return (a < b) ? a : b;
+}
+
+int clip(int x, int minVal, int maxVal) {
+  if (minVal < 0) minVal = 0;
+  if (x < minVal) return minVal;
+  if (x > maxVal) return maxVal;
+  return x;
+}
+
+int interpolate(int x, bool rateLimit) {
+  int speeds[] = {0, 1800, 9000};            // kph (scaled by 0.01)
+  int values_rate[] = {119, 50, 9};          // angle/frame (scaled by 0.04375)
+  int values_limit[] = {11428, 9348, 1028};  // angle limit (scaled by 0.04375)
+  int len = 3;
+  int* values = rateLimit ? values_rate : values_limit;
+  x = clip(x, speeds[0], speeds[len - 1]);
+  for (int i = 0; i < len - 1; i++) {
+    if (x <= speeds[i + 1]) {
+      int x0 = speeds[i], x1 = speeds[i + 1];
+      int y0 = values[i], y1 = values[i + 1];
+
+      // int linear interpolation: y0 + (x - x0) * (y1 - y0) / (x1 - x0)
+      int numerator = (x - x0) * (y1 - y0);
+      int denominator = x1 - x0;
+      return y0 + numerator / denominator;
+    }
+  }
+  return 0;
+}
 
 void CAN1_RX0_IRQ_Handler(void) {
   // PTCAN connects here
@@ -263,17 +301,28 @@ void CAN1_RX0_IRQ_Handler(void) {
         pla_exit = pla_counter_fault || pla_checksum_fault || pla_override;
         pla_stat = ((byte[1] >> 4U) & 0b1111);
         filter = ((pla_stat == 4U || pla_stat == 6U) && !pla_exit);
+        pla_rdlr = to_fwd.RDLR;
         if (pla_override && pla_stat == 9U){
-          pla_rdlr = (to_fwd.RDLR & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
-          byte = (uint8_t *)&pla_rdlr;
-          to_fwd.RDLR = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
+          pla_rdlr = (pla_rdlr & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
           pla_override = false;
         }
+        if (filter) {
+          pla_rate_limit = interpolate(vego, 1);
+          pla_angle_limit = interpolate(vego, 0);
+          pla_angle = clip(PLA_RX_ANGLE, pla_angle - pla_rate_limit, pla_angle + pla_rate_limit);  // rate limit
+          pla_angle = min(pla_angle, pla_angle_limit);                                             // angle limit
+          pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle << 16U));
+        }
+
+        byte = (uint8_t *)&pla_rdlr;
+        to_fwd.RDLR = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
+        pla_angle = PLA_RX_ANGLE;
         pla_rx_counter = (byte[1] & 0xFU);
         pla_wd_counter = 0;  // reset exit counter on RX of PLA
         break;
       case (BREMSE_1):
         // set vEgo to 0
+        vego = (to_fwd.RDLR >> 17U) & 0x7FFF;
         if (filter) {
           to_fwd.RDLR &= 0x0000FFFF;
         }
