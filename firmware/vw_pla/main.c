@@ -367,7 +367,7 @@ void CAN3_RX0_IRQ_Handler(void) {
           msg = to_fwd.RDLR;
           msg = (msg << 32U) | to_fwd.RDHR;
           byte = (uint8_t *)&msg;
-          to_fwd.RDLR = (to_fwd.RDLR & 0xFFFFFF00) | byte[1] ^ byte[2] ^ byte[3] ^ byte[4] ^ byte[5] ^ byte[6];
+          to_fwd.RDLR = (to_fwd.RDLR & 0xFFFFFF00) | (byte[1] ^ byte[2] ^ byte[3] ^ byte[4] ^ byte[5] ^ byte[6]);
         }
         break;
       default:
