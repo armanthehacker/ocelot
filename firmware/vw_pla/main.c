@@ -263,22 +263,30 @@ void CAN1_RX0_IRQ_Handler(void) {
         pla_wd_counter = 0;  // reset exit counter on RX of PLA
         break;
       case (BREMSE_1):
-                    // set vEgo to 0
-        filter ? to_fwd.RDLR &= 0x0000FFFF : (void)0;
+        // set vEgo to 0
+        if (filter) {
+          to_fwd.RDLR &= 0x0000FFFF;
+        }
         break;
       case (BREMSE_3):
-                    // set WSS's to 0
-        filter ? to_fwd.RDLR  = 0x00000000 : (void)0;
-        filter ? to_fwd.RDHR  = 0x00000000 : (void)0;
+        // set WSS's to 0
+        if (filter) {
+          to_fwd.RDLR = 0x00000000;
+          to_fwd.RDHR = 0x00000000;
+        }
         break;
       case (KOMBI_1):
-                    // set cluster speed to 0
-        filter ? to_fwd.RDLR &= 0x01FFFFFF : (void)0;
-        filter ? to_fwd.RDHR &= 0xFFFFFF00 : (void)0;
+        // set cluster speed to 0
+        if (filter) {
+          to_fwd.RDLR &= 0x01FFFFFF;
+          to_fwd.RDHR &= 0xFFFFFF00;
+        }
         break;
       case (GK_1):
-                    // set BCM reverse light on
-        filter ? to_fwd.RDLR |= 0x10000000 : (void)0;
+        // set BCM reverse light on
+        if (filter) {
+          to_fwd.RDLR |= 0x10000000;
+        }
         break;
       default:
         // FWD as-is
