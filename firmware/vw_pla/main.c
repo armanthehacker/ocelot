@@ -252,14 +252,10 @@ uint32_t pla_rdlr;
 uint64_t msg = 0;
 unsigned char *byte;
 
-int angle_pla(PLA_ANGLE){
+int angle_pla(void) {
   pla_sign = PLA_SIGN;
-  if (pla_sign){
-    int pla_angle = PLA_ANGLE * -1;
-  } else {
-    int pla_angle = PLA_ANGLE;
-  }
-  return pla_angle;
+  int pla_angle = PLA_ANGLE;
+  return pla_sign ? -pla_angle : pla_angle;
 }
 
 int interpolate(int x, bool rateLimit) {
@@ -323,8 +319,8 @@ void CAN1_RX0_IRQ_Handler(void) {
         if (filter) {
           pla_rate_limit = interpolate(vego, 1);
           pla_angle_limit = interpolate(vego, 0);
-          pla_angle_last = CLIP(angle_pla(PLA_ANGLE), pla_angle_last - pla_rate_limit, pla_angle_last + pla_rate_limit);  // rate limit
-          pla_angle_last = MIN(pla_angle_last, pla_angle_limit);                                                          // angle limit
+          pla_angle_last = CLIP(angle_pla(), pla_angle_last - pla_rate_limit, pla_angle_last + pla_rate_limit);  // rate limit
+          pla_angle_last = CLIP(pla_angle_last, -pla_angle_limit, pla_angle_limit);                              // angle limit
           // set angle direction bit, angle < 0 = 1
           if (pla_angle_last < 0){
             pla_rdlr = pla_rdlr | 0x80000000;
@@ -333,11 +329,12 @@ void CAN1_RX0_IRQ_Handler(void) {
             pla_rdlr = pla_rdlr & 0x7FFFFFFF;
           }
           pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
+        } else {
+          pla_angle_last = angle_pla();
         }
 
         byte = (uint8_t *)&pla_rdlr;
         to_fwd.RDLR = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
-        pla_angle_last = PLA_ANGLE;
         pla_rx_counter = (byte[1] & 0xFU);
         pla_wd_counter = 0;  // reset exit counter on RX of PLA
         break;
