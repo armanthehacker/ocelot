@@ -264,8 +264,8 @@ int angle_pla(PLA_ANGLE){
 
 int interpolate(int x, bool rateLimit) {
   int speeds[] = {0, 1800, 9000};            // kph (scaled by 0.01)
-  int values_rate[] = {5, 2, 1};             // angle/frame (scaled by 0.04375)
-  int values_limit[] = {1371, 1028, 228};    // angle limit (scaled by 0.04375)
+  int values_rate[] = {5, 1, 0};             // angle/frame (scaled by 0.04375)
+  int values_limit[] = {1371, 228, 0};       // angle limit (scaled by 0.04375)
   int len = 3;
   int* values = rateLimit ? values_rate : values_limit;
   x = CLIP(x, speeds[0], speeds[len - 1]);
