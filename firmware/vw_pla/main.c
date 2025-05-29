@@ -325,11 +325,11 @@ void CAN1_RX0_IRQ_Handler(void) {
           // set angle direction bit, angle < 0 = 1
           if (pla_angle_last < 0){
             pla_rdlr = pla_rdlr | 0x80000000;
-            pla_angle_last = pla_angle_last * -1;
+            pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)(pla_angle_last * -1) << 16U));
           } else {
             pla_rdlr = pla_rdlr & 0x7FFFFFFF;
+            pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
           }
-          pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
         } else {
           pla_angle_last = angle_pla();
         }
