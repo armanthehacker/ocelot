@@ -317,7 +317,7 @@ void CAN1_RX0_IRQ_Handler(void) {
           pla_rdlr = (pla_rdlr & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
           pla_override = false;
         }
-        if (filter) {
+        if (pla_stat == 6U && !pla_exit) {
           pla_rate_limit = interpolate(vego, 1);
           pla_angle_limit = interpolate(vego, 0);
           pla_angle_last = CLIP(angle_pla(), pla_angle_last - pla_rate_limit, pla_angle_last + pla_rate_limit);  // rate limit
