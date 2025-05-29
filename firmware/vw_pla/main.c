@@ -233,6 +233,7 @@ uint8_t crc8_lut_1d[256];
 #define CLIP(x, minVal, maxVal) \
   MAX(minVal, MIN(x, maxVal))
 
+bool send = 0;
 bool filter = false;
 bool pla_counter_fault = false;
 bool pla_checksum_fault = false;
@@ -481,18 +482,22 @@ void set_led(uint8_t color, bool enabled) {
 void TIM3_IRQ_Handler(void) {
   // cmain loop, 100hz
   // below is a debug msg for the filter, checking operation
-  if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
-    CAN_FIFOMailBox_TypeDef to_send;
-    to_send.RDLR = 0xBEBAFECA;
-    to_send.RDHR = filter;
-    to_send.RDTR = 8;
-    to_send.RIR = (MESSAGE_1 << 21) | 1U;
-    // sending to bus 0 (powertrain)
-    can_send(&to_send, 0, false);
+  if (send){
+    if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
+      CAN_FIFOMailBox_TypeDef to_send;
+      to_send.RDLR = pla_rdlr;
+      to_send.RDHR = ((uint32_t)pla_rate_limit << 16U) | pla_angle_limit;
+      to_send.RDTR = 8;
+      to_send.RIR = (MESSAGE_1 << 21) | 1U;
+      // sending to bus 0 (powertrain)
+      can_send(&to_send, 0, false);
 
-    M1_counter += 1;
-    M1_counter &= M1_CYCLE;
+      M1_counter += 1;
+      M1_counter &= M1_CYCLE;
+    }
   }
+  
+  send = !send;
 
     // if PLA isnt seen for 0.5s filter force cancels
   if (pla_wd_counter >= 50) {
