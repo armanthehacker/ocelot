@@ -8,7 +8,7 @@ void grey_init(void) {
   white_grey_common_init();
 
   // Set default state of GPS
-  current_board->set_gps_mode(GPS_ENABLED);
+  current_board->set_gps_mode(GPS_DISABLED);
 }
 
 void grey_set_gps_mode(uint8_t mode) {
