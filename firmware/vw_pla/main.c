@@ -413,8 +413,7 @@ void CAN3_RX0_IRQ_Handler(void) {
         pla_override = ((to_fwd.RDHR >> 20U) == 2U) || pla_override;
         if (pla_override) {
           to_fwd.RDHR = (to_fwd.RDHR & 0x0FFFFF) | 0x200000;
-          msg = to_fwd.RDLR;
-          msg = (msg << 32U) | to_fwd.RDHR;
+          msg = ((uint64_t)to_fwd.RDHR << 32U) | to_fwd.RDLR;
           byte = (uint8_t *)&msg;
           to_fwd.RDLR = (to_fwd.RDLR & 0xFFFFFF00) | (byte[1] ^ byte[2] ^ byte[3] ^ byte[4] ^ byte[5] ^ byte[6]);
         }
