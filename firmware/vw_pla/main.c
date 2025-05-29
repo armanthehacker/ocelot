@@ -217,19 +217,34 @@ uint8_t crc8_lut_1d[256];
 
 #define M1_CYCLE        0xFU
 
-#define PLA_RX_ANGLE    (pla_rdlr >> 16U) & 0x7FFF
+#define PLA_ANGLE    (pla_rdlr >> 16U) & 0x7FFF
+#define PLA_SIGN     (pla_rdlr >> 31U) & 1U
+
+#define MIN(a,b) \
+ ({ __typeof__ (a) _a = (a); \
+     __typeof__ (b) _b = (b); \
+   (_a < _b) ? _a : _b; })
+
+#define MAX(a,b) \
+ ({ __typeof__ (a) _a = (a); \
+     __typeof__ (b) _b = (b); \
+   (_a > _b) ? _a : _b; })
+
+#define CLIP(x, minVal, maxVal) \
+  MAX(minVal, MIN(x, maxVal))
 
 bool filter = false;
 bool pla_counter_fault = false;
 bool pla_checksum_fault = false;
 bool pla_exit = false;
 bool pla_override = false;
+bool pla_sign = 0;
+int pla_angle_last = 0;
 uint8_t pla_stat;
 uint8_t pla_checksum;
 uint8_t pla_rx_counter = 0;
 uint8_t pla_wd_counter = 0;
 uint8_t M1_counter = 0;
-uint16_t pla_angle = 0;
 uint16_t pla_angle_limit = 0;
 uint16_t pla_rate_limit = 0;
 uint16_t vego = 0;
@@ -237,15 +252,14 @@ uint32_t pla_rdlr;
 uint64_t msg = 0;
 unsigned char *byte;
 
-int min(int a, int b) {
-  return (a < b) ? a : b;
-}
-
-int clip(int x, int minVal, int maxVal) {
-  if (minVal < 0) minVal = 0;
-  if (x < minVal) return minVal;
-  if (x > maxVal) return maxVal;
-  return x;
+int angle_pla(PLA_ANGLE){
+  pla_sign = PLA_SIGN;
+  if (pla_sign){
+    int pla_angle = PLA_ANGLE * -1;
+  } else {
+    int pla_angle = PLA_ANGLE;
+  }
+  return pla_angle;
 }
 
 int interpolate(int x, bool rateLimit) {
@@ -254,7 +268,7 @@ int interpolate(int x, bool rateLimit) {
   int values_limit[] = {1371, 1028, 228};    // angle limit (scaled by 0.04375)
   int len = 3;
   int* values = rateLimit ? values_rate : values_limit;
-  x = clip(x, speeds[0], speeds[len - 1]);
+  x = CLIP(x, speeds[0], speeds[len - 1]);
   for (int i = 0; i < len - 1; i++) {
     if (x <= speeds[i + 1]) {
       int x0 = speeds[i], x1 = speeds[i + 1];
@@ -309,14 +323,21 @@ void CAN1_RX0_IRQ_Handler(void) {
         if (filter) {
           pla_rate_limit = interpolate(vego, 1);
           pla_angle_limit = interpolate(vego, 0);
-          pla_angle = clip(PLA_RX_ANGLE, pla_angle - pla_rate_limit, pla_angle + pla_rate_limit);  // rate limit
-          pla_angle = min(pla_angle, pla_angle_limit);                                             // angle limit
-          pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle << 16U));
+          pla_angle_last = CLIP(angle_pla(PLA_ANGLE), pla_angle_last - pla_rate_limit, pla_angle_last + pla_rate_limit);  // rate limit
+          pla_angle_last = MIN(pla_angle_last, pla_angle_limit);                                                          // angle limit
+          // set angle direction bit, angle < 0 = 1
+          if (pla_angle_last < 0){
+            pla_rdlr = pla_rdlr | 0x80000000;
+            pla_angle_last = pla_angle_last * -1;
+          } else {
+            pla_rdlr = pla_rdlr & 0x7FFFFFFF;
+          }
+          pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
         }
 
         byte = (uint8_t *)&pla_rdlr;
         to_fwd.RDLR = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
-        pla_angle = PLA_RX_ANGLE;
+        pla_angle_last = PLA_ANGLE;
         pla_rx_counter = (byte[1] & 0xFU);
         pla_wd_counter = 0;  // reset exit counter on RX of PLA
         break;
