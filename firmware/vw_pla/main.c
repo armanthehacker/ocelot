@@ -233,25 +233,26 @@ uint8_t crc8_lut_1d[256];
 #define CLIP(x, minVal, maxVal) \
   MAX(minVal, MIN(x, maxVal))
 
-bool send = 0;
+bool send = false;
+bool moduleSleep = false;
 bool filter = false;
 bool pla_counter_fault = false;
 bool pla_checksum_fault = false;
 bool pla_exit = false;
 bool pla_override = false;
-bool pla_sign = 0;
+bool pla_sign = false;
 int pla_angle_last = 0;
-uint8_t pla_stat;
-uint8_t pla_checksum;
+uint8_t sleepCounter = 0;
+uint8_t pla_stat = 0;
 uint8_t pla_rx_counter = 0;
 uint8_t pla_wd_counter = 0;
 uint8_t M1_counter = 0;
 uint16_t pla_angle_limit = 0;
 uint16_t pla_rate_limit = 0;
 uint16_t vego = 0;
-uint32_t pla_rdlr;
+uint32_t pla_rdlr = 0;
 uint64_t msg = 0;
-unsigned char *byte;
+unsigned char *byte = 0;
 
 int angle_pla(void) {
   pla_sign = PLA_SIGN;
@@ -342,6 +343,7 @@ void CAN1_RX0_IRQ_Handler(void) {
       case (BREMSE_1):
         // set vEgo to 0
         vego = (to_fwd.RDLR >> 17U) & 0x7FFF;
+        sleepCounter = 0;  // reset sleep timer on RX of BR1
         if (filter) {
           to_fwd.RDLR &= 0x0000FFFF;
         }
@@ -496,16 +498,41 @@ void TIM3_IRQ_Handler(void) {
       M1_counter &= M1_CYCLE;
     }
   }
-  
-  send = !send;
 
     // if PLA isnt seen for 0.5s filter force cancels
   if (pla_wd_counter >= 50) {
     filter = 0;
   }
 
-  pla_wd_counter += 1;
-  pla_wd_counter &= 50;
+    // sleep when BR1 is dead for >750ms
+  if (sleepCounter >= 75) {
+    moduleSleep = 1;
+    send = 0;
+    filter = 0;
+    pla_counter_fault = 0;
+    pla_checksum_fault = 0;
+    pla_exit = 0;
+    pla_override = 0;
+    pla_sign = 0;
+    pla_angle_last = 0;
+    pla_stat = 0;
+    pla_rx_counter = 0;
+    pla_wd_counter = 0;
+    pla_angle_limit = 0;
+    pla_rate_limit = 0;
+    pla_rdlr = 0;
+    vego = 0;
+    msg = 0;
+    byte = 0;
+  } else {
+    moduleSleep = 0;
+    send = !send;
+    pla_wd_counter += 1;
+    pla_wd_counter &= 100;
+  }
+
+  sleepCounter +=1;
+  sleepCounter &= 100;
   TIM3->SR = 0;
 }
 
@@ -513,24 +540,28 @@ void TIM3_IRQ_Handler(void) {
 
 void loop(void) {
   // used for testing, remove for production
-  for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
-    set_led(LED_BLUE, true);
-    delay(fade >> 4);
-    set_led(LED_BLUE, false);
-    delay((MAX_FADE - fade) >> 4);
+  if (!moduleSleep) {
+    for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
+      set_led(LED_BLUE, true);
+      delay(fade >> 4);
+      set_led(LED_BLUE, false);
+      delay((MAX_FADE - fade) >> 4);
+    }
+    for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
+      set_led(LED_GREEN, true);
+      delay(fade >> 4);
+      set_led(LED_GREEN, false);
+      delay((MAX_FADE - fade) >> 4);
+    }
   }
-  for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
-    set_led(LED_GREEN, true);
-    delay(fade >> 4);
-    set_led(LED_GREEN, false);
-    delay((MAX_FADE - fade) >> 4);
-  }
+  /*
   if (state == FAULT_STARTUP || state == FAULT_SCE || state == NO_FAULT) {
     state = NO_FAULT;
     set_gpio_output(GPIOB, 0, 0);  // toggle relay, disconnecting EPS beginning filter
   } else {
     set_gpio_output(GPIOB, 0, 1);  // toggle relay, reconnecting EPS, ending filter
   }
+  */
   //watchdog_feed();  // uncomment for production
 }
 
