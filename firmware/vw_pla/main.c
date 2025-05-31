@@ -336,7 +336,8 @@ void CAN1_RX0_IRQ_Handler(void) {
         }
 
         byte = (uint8_t *)&pla_rdlr;
-        to_fwd.RDLR = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
+        pla_rdlr = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
+        to_fwd.RDLR = pla_rdlr;
         pla_rx_counter = (byte[1] & 0xFU);
         pla_wd_counter = 0;  // reset exit counter on RX of PLA
         break;
@@ -540,19 +541,17 @@ void TIM3_IRQ_Handler(void) {
 
 void loop(void) {
   // used for testing, remove for production
-  if (!moduleSleep) {
-    for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
-      set_led(LED_BLUE, true);
-      delay(fade >> 4);
-      set_led(LED_BLUE, false);
-      delay((MAX_FADE - fade) >> 4);
-    }
-    for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
-      set_led(LED_GREEN, true);
-      delay(fade >> 4);
-      set_led(LED_GREEN, false);
-      delay((MAX_FADE - fade) >> 4);
-    }
+  for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
+    set_led(LED_BLUE, true);
+    delay(fade >> 4);
+    set_led(LED_BLUE, false);
+    delay((MAX_FADE - fade) >> 4);
+  }
+  for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
+    set_led(LED_GREEN, true);
+    delay(fade >> 4);
+    set_led(LED_GREEN, false);
+    delay((MAX_FADE - fade) >> 4);
   }
   /*
   if (state == FAULT_STARTUP || state == FAULT_SCE || state == NO_FAULT) {
