@@ -306,14 +306,14 @@ void CAN1_RX0_IRQ_Handler(void) {
     switch (address) {
       case (PLA_1):
         // toggle filter on when PLA RX is status 4, or 6
-        byte = (uint8_t *)&to_fwd.RDLR;
-        pla_counter_fault = !((byte[1] & 0xFU) == ((pla_rx_counter + 1) & 0xFU));
+        pla_rdlr = to_fwd.RDLR;
+        byte = (uint8_t *)&pla_rdlr;
+        pla_counter_fault = !((byte[1] & 0xFU) > pla_rx_counter);
         pla_checksum_fault = !((byte[0] & 0xFFU) == (byte[1] ^ byte[2] ^ byte[3]));
 
         pla_exit = pla_counter_fault || pla_checksum_fault || pla_override;
         pla_stat = ((byte[1] >> 4U) & 0b1111);
         filter = ((pla_stat == 4U || pla_stat == 6U) && !pla_exit);
-        pla_rdlr = to_fwd.RDLR;
         if (pla_override && pla_stat == 9U){
           pla_rdlr = (pla_rdlr & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
           pla_override = false;
@@ -331,12 +331,12 @@ void CAN1_RX0_IRQ_Handler(void) {
             pla_rdlr = pla_rdlr & 0x7FFFFFFF;
             pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
           }
+          byte = (uint8_t *)&pla_rdlr;
+          pla_rdlr = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
         } else {
           pla_angle_last = angle_pla();
         }
 
-        byte = (uint8_t *)&pla_rdlr;
-        pla_rdlr = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
         to_fwd.RDLR = pla_rdlr;
         pla_rx_counter = (byte[1] & 0xFU);
         pla_wd_counter = 0;  // reset exit counter on RX of PLA
@@ -541,17 +541,19 @@ void TIM3_IRQ_Handler(void) {
 
 void loop(void) {
   // used for testing, remove for production
-  for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
-    set_led(LED_BLUE, true);
-    delay(fade >> 4);
-    set_led(LED_BLUE, false);
-    delay((MAX_FADE - fade) >> 4);
-  }
-  for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
-    set_led(LED_GREEN, true);
-    delay(fade >> 4);
-    set_led(LED_GREEN, false);
-    delay((MAX_FADE - fade) >> 4);
+  if (true) {
+    for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
+      set_led(LED_BLUE, true);
+      delay(fade >> 4);
+      set_led(LED_BLUE, false);
+      delay((MAX_FADE - fade) >> 4);
+    }
+    for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
+      set_led(LED_GREEN, true);
+      delay(fade >> 4);
+      set_led(LED_GREEN, false);
+      delay((MAX_FADE - fade) >> 4);
+    }
   }
   /*
   if (state == FAULT_STARTUP || state == FAULT_SCE || state == NO_FAULT) {
