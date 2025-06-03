@@ -575,6 +575,10 @@ int main(void) {
   set_gpio_output(GPIOC, 7, 1);
   set_gpio_output(GPIOC, 6, 1);
 
+  // GPS OFF, remove for production
+  set_gpio_output(GPIOC, 14, 0);
+  set_gpio_output(GPIOC, 5, 0);
+
   // Init interrupt table
   init_interrupts(true);
 
