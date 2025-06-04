@@ -494,10 +494,27 @@ void TIM3_IRQ_Handler(void) {
       to_send.RIR = (MESSAGE_1 << 21) | 1U;
       // sending to bus 0 (powertrain)
       can_send(&to_send, 0, false);
-
-      M1_counter += 1;
-      M1_counter &= M1_CYCLE;
     }
+    if ((CAN1->TSR & CAN_TSR_TME1) == CAN_TSR_TME1) {
+      CAN_FIFOMailBox_TypeDef to_send;
+      to_send.RDLR = M1_counter;
+      to_send.RDHR = 0x00000000;
+      to_send.RDTR = 8;
+      to_send.RIR = (0x2FE << 21) | 1U;
+      // sending to bus 0 (powertrain)
+      can_send(&to_send, 0, false);
+    }
+    if ((CAN1->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) {
+      CAN_FIFOMailBox_TypeDef to_send;
+      to_send.RDLR = M1_counter;
+      to_send.RDHR = 0x00000000;
+      to_send.RDTR = 8;
+      to_send.RIR = (0x2FD << 21) | 1U;
+      // sending to bus 0 (powertrain)
+      can_send(&to_send, 0, false);
+    }
+    M1_counter += 1;
+    M1_counter &= M1_CYCLE;
   }
 
     // if PLA isnt seen for 0.5s filter force cancels
