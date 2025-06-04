@@ -541,19 +541,17 @@ void TIM3_IRQ_Handler(void) {
 
 void loop(void) {
   // used for testing, remove for production
-  if (true) {
-    for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
-      set_led(LED_BLUE, true);
-      delay(fade >> 4);
-      set_led(LED_BLUE, false);
-      delay((MAX_FADE - fade) >> 4);
-    }
-    for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
-      set_led(LED_GREEN, true);
-      delay(fade >> 4);
-      set_led(LED_GREEN, false);
-      delay((MAX_FADE - fade) >> 4);
-    }
+  for (uint32_t fade = 0U; fade < MAX_FADE; fade += 1U) {
+    set_led(LED_BLUE, true);
+    delay(fade >> 4);
+    set_led(LED_BLUE, false);
+    delay((MAX_FADE - fade) >> 4);
+  }
+  for (uint32_t fade = MAX_FADE; fade > 0U; fade -= 1U) {
+    set_led(LED_GREEN, true);
+    delay(fade >> 4);
+    set_led(LED_GREEN, false);
+    delay((MAX_FADE - fade) >> 4);
   }
   /*
   if (state == FAULT_STARTUP || state == FAULT_SCE || state == NO_FAULT) {
