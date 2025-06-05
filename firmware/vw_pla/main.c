@@ -308,7 +308,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         // toggle filter on when PLA RX is status 4, or 6
         pla_rdlr = to_fwd.RDLR;
         byte = (uint8_t *)&pla_rdlr;
-        pla_counter_fault = !((byte[1] & 0xFU) > pla_rx_counter);
+        pla_counter_fault = !((byte[1] & 0xFU) == ((pla_rx_counter + 1) & 0xFU));
         pla_checksum_fault = !((byte[0] & 0xFFU) == (byte[1] ^ byte[2] ^ byte[3]));
 
         pla_exit = pla_counter_fault || pla_checksum_fault || pla_override;
