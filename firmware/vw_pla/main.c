@@ -325,7 +325,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         filter = ((hca_stat == 11U || hca_stat == 13U) && !pla_exit);
         if (hca_stat == 10U || hca_stat == 11U || hca_stat == 13U || hca_stat == 15U) {
           hca_rdlr = to_fwd.RDLR;
-          hca_rdlr = (hca_rdlr & 0xFFFFFF00);  // mask off checksum
+          hca_rdlr = (hca_rdlr & 0xFFFF0F00) | 0x00003000;  // mask off checksum and set HCA status 3
           if (pla_override && hca_stat == 10U){
             pla_override = false;
           }
