@@ -207,18 +207,19 @@ uint8_t state = FAULT_STARTUP;
 const uint8_t crc_poly = 0x1D;  // standard crc8 SAE J1850
 uint8_t crc8_lut_1d[256];
 
-#define PLA_1           0x3D4  // RX
+#define HCA_1           0x0D2  // RX
 #define BREMSE_1        0x1A0  // RX
 #define BREMSE_3        0x4A0  // RX
 #define KOMBI_1         0x320  // RX
 #define GK_1            0x390  // RX
 #define LENKHILFE_2     0x3D2  // RX
+#define PLA_1           0x3D4  // TX
 #define MESSAGE_1       0x2FF  // TX
 
 #define M1_CYCLE        0xFU
 
-#define PLA_ANGLE    (pla_rdlr >> 16U) & 0x7FFF
-#define PLA_SIGN     (pla_rdlr >> 31U) & 1U
+#define PLA_ANGLE    (hca_rdlr >> 16U) & 0x7FFF
+#define PLA_SIGN     (hca_rdlr >> 31U) & 1U
 
 #define MIN(a,b) \
  ({ __typeof__ (a) _a = (a); \
@@ -236,21 +237,22 @@ uint8_t crc8_lut_1d[256];
 bool send = false;
 bool moduleSleep = false;
 bool filter = false;
-bool pla_counter_fault = false;
-bool pla_checksum_fault = false;
+bool hca_counter_fault = false;
+bool hca_checksum_fault = false;
 bool pla_exit = false;
 bool pla_override = false;
 bool pla_sign = false;
 int pla_angle_last = 0;
 uint8_t sleepCounter = 0;
-uint8_t pla_stat = 0;
-uint8_t pla_rx_counter = 0;
+uint8_t hca_stat = 0;
+uint8_t hca_rx_counter = 0;
 uint8_t pla_wd_counter = 0;
 uint8_t M1_counter = 0;
 uint16_t pla_angle_limit = 0;
 uint16_t pla_rate_limit = 0;
 uint16_t vego = 0;
 uint32_t pla_rdlr = 0;
+uint32_t hca_rdlr = 0;
 uint64_t msg = 0;
 unsigned char *byte = 0;
 
@@ -304,42 +306,56 @@ void CAN1_RX0_IRQ_Handler(void) {
     #endif
 
     switch (address) {
-      case (PLA_1):
-        // toggle filter on when PLA RX is status 4, or 6
-        pla_rdlr = to_fwd.RDLR;
-        byte = (uint8_t *)&pla_rdlr;
-        pla_counter_fault = !((byte[1] & 0xFU) == ((pla_rx_counter + 1) & 0xFU));
-        pla_checksum_fault = !((byte[0] & 0xFFU) == (byte[1] ^ byte[2] ^ byte[3]));
+      case (HCA_1):
+        /*
+                  PLA_1 EPS stat + 7
+                  10 - driver override flag reset
+                  11 - entry request
+                  13 - active
+                  15 - standby
+        */
+        // toggle filter on when HCA RX is status 11, or 15
+        msg = ((uint64_t)to_fwd.RDHR << 32U) | to_fwd.RDLR;
+        byte = (uint8_t *)&msg;
+        hca_counter_fault = !((byte[1] & 0xFU) == ((hca_rx_counter + 1) & 0xFU));
+        hca_checksum_fault = !((byte[0] & 0xFFU) == (byte[1] ^ byte[2] ^ byte[3] ^ byte[4]));
 
-        pla_exit = pla_counter_fault || pla_checksum_fault || pla_override;
-        pla_stat = ((byte[1] >> 4U) & 0b1111);
-        filter = ((pla_stat == 4U || pla_stat == 6U) && !pla_exit);
-        if (pla_override && pla_stat == 9U){
-          pla_rdlr = (pla_rdlr & 0xFFFF0F00) | 0x00008000;  // mask off checksum and set PLA status 8
-          pla_override = false;
-        }
-        if (pla_stat == 6U && !pla_exit) {
-          pla_rate_limit = interpolate(vego, 1);
-          pla_angle_limit = interpolate(vego, 0);
-          pla_angle_last = CLIP(angle_pla(), pla_angle_last - pla_rate_limit, pla_angle_last + pla_rate_limit);  // rate limit
-          pla_angle_last = CLIP(pla_angle_last, -pla_angle_limit, pla_angle_limit);                              // angle limit
-          // set angle direction bit, angle < 0 = 1
-          if (pla_angle_last < 0){
-            pla_rdlr = pla_rdlr | 0x80000000;
-            pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)(pla_angle_last * -1) << 16U));
-          } else {
-            pla_rdlr = pla_rdlr & 0x7FFFFFFF;
-            pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
+        pla_exit = hca_counter_fault || hca_checksum_fault || pla_override;
+        hca_stat = ((byte[1] >> 4U) & 0b1111);
+        filter = ((hca_stat == 11U || hca_stat == 13U) && !pla_exit);
+        if (hca_stat == 10U || hca_stat == 11U || hca_stat == 13U || hca_stat == 15U) {
+          hca_rdlr = to_fwd.RDLR;
+          hca_rdlr = (hca_rdlr & 0xFFFFFF00);  // mask off checksum
+          if (pla_override && hca_stat == 10U){
+            pla_override = false;
           }
-          byte = (uint8_t *)&pla_rdlr;
-          pla_rdlr = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
-        } else {
-          pla_angle_last = angle_pla();
+          if (hca_stat == 13U && !pla_exit) {
+            pla_rate_limit = interpolate(vego, 1);
+            pla_angle_limit = interpolate(vego, 0);
+            pla_angle_last = CLIP(angle_pla(), pla_angle_last - pla_rate_limit, pla_angle_last + pla_rate_limit);  // rate limit
+            pla_angle_last = CLIP(pla_angle_last, -pla_angle_limit, pla_angle_limit);                              // angle limit
+            // set angle direction bit, angle < 0 = 1
+            if (pla_angle_last < 0){
+              hca_rdlr = hca_rdlr | 0x80000000;
+              hca_rdlr = ((hca_rdlr & 0x8000FF00) | ((uint32_t)(pla_angle_last * -1) << 16U));
+            } else {
+              hca_rdlr = hca_rdlr & 0x7FFFFFFF;
+              hca_rdlr = ((hca_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
+            }
+          } else {
+            pla_angle_last = angle_pla();
+          }
+          // handling PLA off to PLA TX handler
+          pla_rdlr = (hca_rdlr & 0xFFFF0000) | ((uint16_t)(hca_stat - 7U) << 12U);
+          pla_wd_counter = 0;  // reset exit counter on RX of PLA control
+
+          // cleaning mHCA_1 fwd to EPS
+          byte[1] = (byte[1] & 0x0F) | 0x30;  // set HCA status 3
+          hca_rdlr = hca_rdlr | (byte[1] ^ byte[2] ^ byte[3] ^ byte[4]);  // recalc checksum
+          to_fwd.RDLR = hca_rdlr;
         }
 
-        to_fwd.RDLR = pla_rdlr;
-        pla_rx_counter = (byte[1] & 0xFU);
-        pla_wd_counter = 0;  // reset exit counter on RX of PLA
+        hca_rx_counter = (byte[1] & 0xFU);
         break;
       case (BREMSE_1):
         // set vEgo to 0
@@ -527,14 +543,14 @@ void TIM3_IRQ_Handler(void) {
     moduleSleep = 1;
     send = 0;
     filter = 0;
-    pla_counter_fault = 0;
-    pla_checksum_fault = 0;
+    hca_counter_fault = 0;
+    hca_checksum_fault = 0;
     pla_exit = 0;
     pla_override = 0;
     pla_sign = 0;
     pla_angle_last = 0;
-    pla_stat = 0;
-    pla_rx_counter = 0;
+    hca_stat = 0;
+    hca_rx_counter = 0;
     pla_wd_counter = 0;
     pla_angle_limit = 0;
     pla_rate_limit = 0;
