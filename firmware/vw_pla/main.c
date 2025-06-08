@@ -213,13 +213,13 @@ uint8_t crc8_lut_1d[256];
 #define KOMBI_1         0x320  // RX
 #define GK_1            0x390  // RX
 #define LENKHILFE_2     0x3D2  // RX
-#define PLA_1           0x3D4  // TX
+#define PLA_1           0x3D4  // TX (RX too if OEM present)
 #define MESSAGE_1       0x2FF  // TX
 
 #define M1_CYCLE        0xFU
 
-#define PLA_ANGLE    (hca_rdlr >> 16U) & 0x7FFF
-#define PLA_SIGN     (hca_rdlr >> 31U) & 1U
+#define PLA_ANGLE    (pla_rdlr >> 16U) & 0x7FFF
+#define PLA_SIGN     (pla_rdlr >> 31U) & 1U
 
 #define MIN(a,b) \
  ({ __typeof__ (a) _a = (a); \
@@ -329,23 +329,7 @@ void CAN1_RX0_IRQ_Handler(void) {
           if (pla_override && hca_stat == 10U){
             pla_override = false;
           }
-          if (hca_stat == 13U && !pla_exit) {
-            pla_rate_limit = interpolate(vego, 1);
-            pla_angle_limit = interpolate(vego, 0);
-            pla_angle_last = CLIP(angle_pla(), pla_angle_last - pla_rate_limit, pla_angle_last + pla_rate_limit);  // rate limit
-            pla_angle_last = CLIP(pla_angle_last, -pla_angle_limit, pla_angle_limit);                              // angle limit
-            // set angle direction bit, angle < 0 = 1
-            if (pla_angle_last < 0){
-              hca_rdlr = hca_rdlr | 0x80000000;
-              hca_rdlr = ((hca_rdlr & 0x8000FF00) | ((uint32_t)(pla_angle_last * -1) << 16U));
-            } else {
-              hca_rdlr = hca_rdlr & 0x7FFFFFFF;
-              hca_rdlr = ((hca_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
-            }
-          } else {
-            pla_angle_last = angle_pla();
-          }
-          // handling PLA off to PLA TX handler
+          // handing off to PLA TX handler
           pla_rdlr = (hca_rdlr & 0xFFFF0000) | ((uint16_t)(hca_stat - 7U) << 12U);
           pla_wd_counter = 0;  // reset exit counter on RX of PLA control
 
@@ -353,9 +337,15 @@ void CAN1_RX0_IRQ_Handler(void) {
           byte[1] = (byte[1] & 0x0F) | 0x30;  // set HCA status 3
           hca_rdlr = hca_rdlr | (byte[1] ^ byte[2] ^ byte[3] ^ byte[4]);  // recalc checksum
           to_fwd.RDLR = hca_rdlr;
+        } else {
+          // TODO: look into replicating OEM module functionality? maybe not needed.. (mimicking angle/sign)
+          pla_rdlr = 0x00000000;
         }
 
         hca_rx_counter = (byte[1] & 0xFU);
+        break;
+      case (PLA_1):
+        // TODO: add module pla override if OEM status != 8
         break;
       case (BREMSE_1):
         // set vEgo to 0
@@ -502,32 +492,44 @@ void TIM3_IRQ_Handler(void) {
   // cmain loop, 100hz
   // below is a debug msg for the filter, checking operation
   if (send){
-    if ((CAN1->TSR & CAN_TSR_TME0) == CAN_TSR_TME0) {
+    if ((CAN1->TSR & CAN_TSR_TME1) == CAN_TSR_TME1) {
       CAN_FIFOMailBox_TypeDef to_send;
       to_send.RDLR = pla_rdlr;
-      to_send.RDHR = ((uint32_t)pla_rate_limit << 16U) | pla_angle_limit;
+      to_send.RDHR = (pla_exit << 1U) | filter;
       to_send.RDTR = 8;
       to_send.RIR = (MESSAGE_1 << 21) | 1U;
       // sending to bus 0 (powertrain)
       can_send(&to_send, 0, false);
     }
-    if ((CAN1->TSR & CAN_TSR_TME1) == CAN_TSR_TME1) {
+    if ((CAN3->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) {
       CAN_FIFOMailBox_TypeDef to_send;
-      to_send.RDLR = M1_counter;
+
+      if (hca_stat == 13U && !pla_exit) {
+        pla_rate_limit = interpolate(vego, 1);
+        pla_angle_limit = interpolate(vego, 0);
+        pla_angle_last = CLIP(angle_pla(), pla_angle_last - pla_rate_limit, pla_angle_last + pla_rate_limit);  // rate limit
+        pla_angle_last = CLIP(pla_angle_last, -pla_angle_limit, pla_angle_limit);                              // angle limit
+        // set angle direction bit, angle < 0 = 1
+        if (pla_angle_last < 0){
+          pla_rdlr = pla_rdlr | 0x80000000;
+          pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)(pla_angle_last * -1) << 16U));
+        } else {
+          pla_rdlr = pla_rdlr & 0x7FFFFFFF;
+          pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
+        }
+      } else {
+        pla_angle_last = angle_pla();
+      }
+
+      pla_rdlr = pla_rdlr | ((uint16_t)M1_counter << 8U);
+      byte = (uint8_t *)&pla_rdlr;
+      pla_rdlr = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
+      to_send.RDLR = pla_rdlr;
       to_send.RDHR = 0x00000000;
       to_send.RDTR = 8;
-      to_send.RIR = (0x2FE << 21) | 1U;
-      // sending to bus 0 (powertrain)
-      can_send(&to_send, 0, false);
-    }
-    if ((CAN1->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) {
-      CAN_FIFOMailBox_TypeDef to_send;
-      to_send.RDLR = M1_counter;
-      to_send.RDHR = 0x00000000;
-      to_send.RDTR = 8;
-      to_send.RIR = (0x2FD << 21) | 1U;
-      // sending to bus 0 (powertrain)
-      can_send(&to_send, 0, false);
+      to_send.RIR = (PLA_1 << 21) | 1U;
+      // sending to bus 2 (EPS)
+      can_send(&to_send, 2, false);
     }
     M1_counter += 1;
     M1_counter &= M1_CYCLE;
