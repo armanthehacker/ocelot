@@ -253,6 +253,7 @@ uint16_t pla_rate_limit = 0;
 uint16_t vego = 0;
 uint32_t pla_rdlr = 0;
 uint32_t hca_rdlr = 0;
+uint32_t debug_rdlr = 0;
 uint64_t msg = 0;
 unsigned char *byte = 0;
 
@@ -491,8 +492,8 @@ void TIM3_IRQ_Handler(void) {
   if (send){
     if ((CAN1->TSR & CAN_TSR_TME1) == CAN_TSR_TME1) {
       CAN_FIFOMailBox_TypeDef to_send;
-      to_send.RDLR = pla_rdlr;
-      to_send.RDHR = (M1_counter << 2U) | (pla_exit << 1U) | filter;
+      to_send.RDLR = debug_rdlr;
+      to_send.RDHR = ((uint16_t)M1_counter << 8U) | (pla_exit << 1U) | filter;
       to_send.RDTR = 8;
       to_send.RIR = (MESSAGE_1 << 21) | 1U;
       // sending to bus 0 (powertrain)
@@ -521,6 +522,7 @@ void TIM3_IRQ_Handler(void) {
       pla_rdlr = (pla_rdlr & 0xFFFFF000) | ((uint16_t)M1_counter << 8U);
       byte = (uint8_t *)&pla_rdlr;
       pla_rdlr = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
+      debug_rdlr = pla_rdlr;
       to_send.RDLR = pla_rdlr;
       to_send.RDHR = 0x00000000;
       to_send.RDTR = 8;
