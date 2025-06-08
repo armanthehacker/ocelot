@@ -337,10 +337,7 @@ void CAN1_RX0_IRQ_Handler(void) {
           byte[1] = (byte[1] & 0x0F) | 0x30;  // set HCA status 3
           hca_rdlr = hca_rdlr | (byte[1] ^ byte[2] ^ byte[3] ^ byte[4]);  // recalc checksum
           to_fwd.RDLR = hca_rdlr;
-        } else {
-          // TODO: look into replicating OEM module functionality? maybe not needed.. (mimicking angle/sign)
-          pla_rdlr = 0x00000000;
-        }
+        }  //  else {} TODO: look into replicating OEM module functionality? maybe not needed.. (mimicking angle/sign)
 
         hca_rx_counter = (byte[1] & 0xFU);
         break;
@@ -495,7 +492,7 @@ void TIM3_IRQ_Handler(void) {
     if ((CAN1->TSR & CAN_TSR_TME1) == CAN_TSR_TME1) {
       CAN_FIFOMailBox_TypeDef to_send;
       to_send.RDLR = pla_rdlr;
-      to_send.RDHR = (pla_exit << 1U) | filter;
+      to_send.RDHR = (M1_counter << 2U) | (pla_exit << 1U) | filter;
       to_send.RDTR = 8;
       to_send.RIR = (MESSAGE_1 << 21) | 1U;
       // sending to bus 0 (powertrain)
@@ -521,7 +518,7 @@ void TIM3_IRQ_Handler(void) {
         pla_angle_last = angle_pla();
       }
 
-      pla_rdlr = pla_rdlr | ((uint16_t)M1_counter << 8U);
+      pla_rdlr = (pla_rdlr & 0xFFFFF000) | ((uint16_t)M1_counter << 8U);
       byte = (uint8_t *)&pla_rdlr;
       pla_rdlr = pla_rdlr | (byte[1] ^ byte[2] ^ byte[3]);
       to_send.RDLR = pla_rdlr;
@@ -530,9 +527,9 @@ void TIM3_IRQ_Handler(void) {
       to_send.RIR = (PLA_1 << 21) | 1U;
       // sending to bus 2 (EPS)
       can_send(&to_send, 2, false);
+      M1_counter += 1;
+      M1_counter &= M1_CYCLE;
     }
-    M1_counter += 1;
-    M1_counter &= M1_CYCLE;
   }
 
     // if PLA isnt seen for 0.5s filter force cancels
