@@ -242,6 +242,9 @@ bool hca_checksum_fault = false;
 bool pla_exit = false;
 bool pla_override = false;
 bool pla_sign = false;
+bool pla_limit = false;
+bool oempla_active = false;
+int pla_angle = 0;
 int pla_angle_last = 0;
 uint8_t sleepCounter = 0;
 uint8_t hca_stat = 0;
@@ -252,6 +255,7 @@ uint16_t pla_angle_limit = 0;
 uint16_t pla_rate_limit = 0;
 uint16_t vego = 0;
 uint32_t pla_rdlr = 0;
+uint32_t oempla_rdlr = 0;
 uint32_t hca_rdlr = 0;
 uint32_t debug_rdlr = 0;
 uint64_t msg = 0;
@@ -323,27 +327,28 @@ void CAN1_RX0_IRQ_Handler(void) {
 
         pla_exit = hca_counter_fault || hca_checksum_fault || pla_override;
         hca_stat = ((byte[1] >> 4U) & 0b1111);
-        filter = ((hca_stat == 11U || hca_stat == 13U) && !pla_exit);
+        filter = ((hca_stat == 11U || hca_stat == 13U) && !pla_exit && !oempla_active);
         if (hca_stat == 10U || hca_stat == 11U || hca_stat == 13U || hca_stat == 15U) {
+          pla_wd_counter = 0;  // reset exit counter on RX of PLA control
           hca_rdlr = to_fwd.RDLR;
           hca_rdlr = (hca_rdlr & 0xFFFF0F00) | 0x00003000;  // mask off checksum and set HCA status 3
           if (pla_override && hca_stat == 10U){
             pla_override = false;
           }
-          // handing off to PLA TX handler
-          pla_rdlr = (hca_rdlr & 0xFFFF0000) | ((uint16_t)(hca_stat - 7U) << 12U);
-          pla_wd_counter = 0;  // reset exit counter on RX of PLA control
 
           // cleaning mHCA_1 fwd to EPS
           byte[1] = (byte[1] & 0x0F) | 0x30;  // set HCA status 3
           hca_rdlr = hca_rdlr | (byte[1] ^ byte[2] ^ byte[3] ^ byte[4]);  // recalc checksum
           to_fwd.RDLR = hca_rdlr;
-        }  //  else {} TODO: look into replicating OEM module functionality? maybe not needed.. (mimicking angle/sign)
+        }
 
         hca_rx_counter = (byte[1] & 0xFU);
         break;
       case (PLA_1):
         // TODO: add module pla override if OEM status != 8
+        oempla_rdlr = to_fwd.RDLR;
+        byte = (uint8_t *)&oempla_rdlr;
+        oempla_active = ((byte[1] >> 4U) & 0b1111) != 8U;
         break;
       case (BREMSE_1):
         // set vEgo to 0
@@ -378,7 +383,10 @@ void CAN1_RX0_IRQ_Handler(void) {
         break;
     }
     // send to CAN3
-    can_send(&to_fwd, 2, false);
+    // TODO: remove HCA_1 once confirmed working
+    if ((address != PLA_1) || (address != HCA_1)){
+      can_send(&to_fwd, 2, false);
+    }
     // next
     can_rx(0);
   }
@@ -493,7 +501,7 @@ void TIM3_IRQ_Handler(void) {
     if ((CAN1->TSR & CAN_TSR_TME1) == CAN_TSR_TME1) {
       CAN_FIFOMailBox_TypeDef to_send;
       to_send.RDLR = debug_rdlr;
-      to_send.RDHR = ((uint16_t)M1_counter << 8U) | (pla_exit << 1U) | filter;
+      to_send.RDHR = ((uint16_t)M1_counter << 8U) | (pla_limit << 2U) | (pla_exit << 1U) | filter;
       to_send.RDTR = 8;
       to_send.RIR = (MESSAGE_1 << 21) | 1U;
       // sending to bus 0 (powertrain)
@@ -502,21 +510,29 @@ void TIM3_IRQ_Handler(void) {
     if ((CAN3->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) {
       CAN_FIFOMailBox_TypeDef to_send;
 
-      if (hca_stat == 13U && !pla_exit) {
-        pla_rate_limit = interpolate(vego, 1);
-        pla_angle_limit = interpolate(vego, 0);
-        pla_angle_last = CLIP(angle_pla(), pla_angle_last - pla_rate_limit, pla_angle_last + pla_rate_limit);  // rate limit
-        pla_angle_last = CLIP(pla_angle_last, -pla_angle_limit, pla_angle_limit);                              // angle limit
-        // set angle direction bit, angle < 0 = 1
-        if (pla_angle_last < 0){
-          pla_rdlr = pla_rdlr | 0x80000000;
-          pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)(pla_angle_last * -1) << 16U));
+      if ((hca_stat == 10U || hca_stat == 11U || hca_stat == 13U || hca_stat == 15U) && !oempla_active) {
+        pla_rdlr = (hca_rdlr & 0xFFFF0000) | ((uint16_t)(hca_stat - 7U) << 12U);
+        if (hca_stat == 13U && !pla_exit) {
+          pla_rate_limit = interpolate(vego, 1);
+          pla_angle_limit = interpolate(vego, 0);
+          pla_angle = angle_pla();
+          pla_angle_last = CLIP(pla_angle, pla_angle_last - pla_rate_limit, pla_angle_last + pla_rate_limit);  // rate limit
+          pla_angle_last = CLIP(pla_angle_last, -pla_angle_limit, pla_angle_limit);                            // angle limit
+          pla_limit = (pla_angle != pla_angle_last);
+          // set angle direction bit, angle < 0 = 1
+          if (pla_angle_last < 0){
+            pla_rdlr = pla_rdlr | 0x80000000;
+            pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)(pla_angle_last * -1) << 16U));
+          } else {
+            pla_rdlr = pla_rdlr & 0x7FFFFFFF;
+            pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
+          }
         } else {
-          pla_rdlr = pla_rdlr & 0x7FFFFFFF;
-          pla_rdlr = ((pla_rdlr & 0x8000FF00) | ((uint32_t)pla_angle_last << 16U));
+          pla_angle_last = angle_pla();
         }
       } else {
-        pla_angle_last = angle_pla();
+        // TODO: look into replicating OEM module functionality? maybe not needed.. (mimicking angle/sign)
+        pla_rdlr = oempla_rdlr;
       }
 
       pla_rdlr = (pla_rdlr & 0xFFFFF000) | ((uint16_t)M1_counter << 8U);
