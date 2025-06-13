@@ -248,6 +248,7 @@ int pla_angle = 0;
 int pla_angle_last = 0;
 uint8_t sleepCounter = 0;
 uint8_t hca_stat = 0;
+uint8_t pla_stat = 0;
 uint8_t hca_rx_counter = 0;
 uint8_t pla_wd_counter = 0;
 uint8_t M1_counter = 0;
@@ -511,7 +512,8 @@ void TIM3_IRQ_Handler(void) {
       CAN_FIFOMailBox_TypeDef to_send;
 
       if ((hca_stat == 10U || hca_stat == 11U || hca_stat == 13U || hca_stat == 15U) && !oempla_active) {
-        pla_rdlr = (hca_rdlr & 0xFFFF0000) | ((uint16_t)(hca_stat - 7U) << 12U);
+        pla_stat = (hca_stat == 10U ? 8U : hca_stat - 7U);
+        pla_rdlr = (hca_rdlr & 0xFFFF0000) | ((uint16_t)pla_stat << 12U);
         if (hca_stat == 13U && !pla_exit) {
           pla_rate_limit = interpolate(vego, 1);
           pla_angle_limit = interpolate(vego, 0);
@@ -567,6 +569,7 @@ void TIM3_IRQ_Handler(void) {
     pla_sign = 0;
     pla_angle_last = 0;
     hca_stat = 0;
+    pla_stat = 0;
     hca_rx_counter = 0;
     pla_wd_counter = 0;
     pla_angle_limit = 0;
