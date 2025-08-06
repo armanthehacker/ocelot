@@ -332,16 +332,18 @@ void CAN1_RX0_IRQ_Handler(void) {
         hca_stat = ((byte[1] >> 4U) & 0b1111);
         filter = ((hca_stat == 11U || hca_stat == 13U) && !pla_exit && !oempla_active);
         if (hca_stat == 10U || hca_stat == 11U || hca_stat == 13U || hca_stat == 15U) {
-          pla_wd_counter = 0;  // reset exit counter on RX of PLA control
-          hca_rdlr = to_fwd.RDLR;
-          hca_rdlr = (hca_rdlr & 0xFFFF0F00) | 0x00003000;  // mask off checksum and set HCA status 3
+          if (!pla_exit){
+            pla_wd_counter = 0;  // reset exit counter on proper RX of PLA control
+          }
           if (pla_override && hca_stat == 10U){
             pla_override = false;
           }
 
           // cleaning mHCA_1 fwd to EPS
-          byte[1] = (byte[1] & 0x0F) | 0x30;  // set HCA status 3
-          hca_rdlr = hca_rdlr | (byte[1] ^ byte[2] ^ byte[3] ^ byte[4]);  // recalc checksum
+          hca_rdlr = to_fwd.RDLR;
+          hca_rdlr = (hca_rdlr & 0xFFFF0F00) | 0x00003000;  // mask off checksum and set HCA status 3
+          byte[1] = (byte[1] & 0x0F) | 0x30;  // set HCA status 3 for checksum calc
+          hca_rdlr = hca_rdlr | (byte[1] ^ byte[2] ^ byte[3] ^ byte[4]);  // xor-checksum
           to_fwd.RDLR = hca_rdlr;
         }
 
