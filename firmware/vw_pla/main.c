@@ -210,7 +210,6 @@ uint8_t crc8_lut_1d[256];
 #define HCA_1           0x0D2  // RX
 #define BREMSE_1        0x1A0  // RX
 #define BREMSE_3        0x4A0  // RX
-#define KOMBI_1         0x320  // RX
 #define GK_1            0x390  // RX
 #define LENKHILFE_2     0x3D2  // RX
 #define PLA_1           0x3D4  // TX (RX too if OEM present)
@@ -331,7 +330,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         pla_exit = hca_counter_fault || hca_checksum_fault || pla_override;
         hca_stat = ((byte[1] >> 4U) & 0b1111);
         filter = ((hca_stat == 11U || hca_stat == 13U) && !pla_exit && !oempla_active);
-        if (hca_stat == 10U || hca_stat == 11U || hca_stat == 13U || hca_stat == 15U) {
+        if (hca_stat >= 10U) {
           if (!pla_exit){
             pla_wd_counter = 0;  // reset exit counter on proper RX of PLA control
           }
@@ -356,7 +355,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         oempla_active = ((byte[1] >> 4U) & 0b1111) != 8U;
         break;
       case (BREMSE_1):
-        // set vEgo to 0
+        // set vEgo to 0 when entering, spoof to 8kph once active TODO: spoof to 9 or even 10kph
         vego = (to_fwd.RDLR >> 17U) & 0x7FFF;
         sleepCounter = 0;  // reset sleep timer on RX of BR1
         if (filter) {
@@ -366,15 +365,8 @@ void CAN1_RX0_IRQ_Handler(void) {
       case (BREMSE_3):
         // set WSS's to 0
         if (filter) {
-          to_fwd.RDLR = LH2_PLA ? 0x063C063C : 0x00000000;
-          to_fwd.RDHR = LH2_PLA ? 0x063C063C : 0x00000000;
-        }
-        break;
-      case (KOMBI_1):
-        // set cluster speed to 0
-        if (filter) {
-          to_fwd.RDLR = LH2_PLA ? ((to_fwd.RDLR & 0x01FFFFFF) | 0x04000000) : to_fwd.RDLR & 0x01FFFFFF;
-          to_fwd.RDHR = LH2_PLA ? ((to_fwd.RDHR & 0xFFFFFF00) | 0x00000006) : to_fwd.RDHR & 0xFFFFFF00;
+          to_fwd.RDLR = 0x00000000;
+          to_fwd.RDHR = 0x00000000;
         }
         break;
       case (GK_1):
@@ -388,8 +380,7 @@ void CAN1_RX0_IRQ_Handler(void) {
         break;
     }
     // send to CAN3
-    // TODO: remove HCA_1 once confirmed working
-    if ((address != PLA_1) || (address != HCA_1)){
+    if (address != PLA_1){
       can_send(&to_fwd, 2, false);
     }
     // next
@@ -517,7 +508,7 @@ void TIM3_IRQ_Handler(void) {
     if ((CAN3->TSR & CAN_TSR_TME2) == CAN_TSR_TME2) {
       CAN_FIFOMailBox_TypeDef to_send;
 
-      if ((hca_stat == 10U || hca_stat == 11U || hca_stat == 13U || hca_stat == 15U) && !oempla_active) {
+      if ((hca_stat >= 10U) && !oempla_active) {
         pla_stat = (hca_stat == 10U ? 8U : hca_stat - 7U);
         pla_rdlr = (hca_rdlr & 0xFFFF0000) | ((uint16_t)pla_stat << 12U);
         if (hca_stat == 13U && !pla_exit) {
