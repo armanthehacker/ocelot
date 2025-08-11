@@ -212,6 +212,7 @@ uint8_t crc8_lut_1d[256];
 #define BREMSE_3        0x4A0  // RX
 #define GK_1            0x390  // RX
 #define LENKHILFE_2     0x3D2  // RX
+#define LENKHILFE_3     0xD0   // RX
 #define PLA_1           0x3D4  // TX (RX too if OEM present)
 #define MESSAGE_1       0x2FF  // TX
 
@@ -244,6 +245,8 @@ bool pla_sign = false;
 bool pla_limit = false;
 bool oempla_active = false;
 bool LH2_PLA = false;
+bool LH3_LMsign = false;
+float LH3_LM = 0;  // driver torque on wheel
 int pla_angle = 0;
 int pla_angle_last = 0;
 uint8_t sleepCounter = 0;
@@ -449,6 +452,11 @@ void CAN3_RX0_IRQ_Handler(void) {
           byte = (uint8_t *)&msg;
           to_fwd.RDLR = (to_fwd.RDLR & 0xFFFFFF00) | (byte[1] ^ byte[2] ^ byte[3] ^ byte[4] ^ byte[5] ^ byte[6]);
         }
+        break;
+      case (LENKHILFE_3):
+      // TODO: add module driven override based on driver torque. use EMA as to not track historical state or work out a state machine
+        LH3_LM = ((to_fwd.RDLR >> 16U) & 0xFF07) * 0.0147;  // shift, mask, and scale for driver torque
+        LH3_LMsign = (to_fwd.RDLR >> 26U) & 1U;
         break;
       default:
         // FWD as-is
