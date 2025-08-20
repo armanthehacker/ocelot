@@ -273,24 +273,21 @@ int angle_pla(void) {
 }
 
 int interpolate(int x, bool rateLimit) {
-  int speeds[] = {0, 1800, 9000};            // kph (scaled by 0.01)
-  int values_rate[] = {119, 50, 9};          // angle/frame (scaled by 0.04375)
-  int values_limit[] = {11428, 9348, 1028};  // angle limit (scaled by 0.04375)
-  int len = 3;
-  int* values = rateLimit ? values_rate : values_limit;
-  x = CLIP(x, speeds[0], speeds[len - 1]);
-  for (int i = 0; i < len - 1; i++) {
-    if (x <= speeds[i + 1]) {
-      int x0 = speeds[i], x1 = speeds[i + 1];
-      int y0 = values[i], y1 = values[i + 1];
+  static const int speeds[]      = {0, 1800, 9000};       // kph (scaled by 0.01)
+  static const int values_rate[] = {119, 50, 9};          // angle/frame (scaled by 0.04375)
+  static const int values_limit[]= {11428, 9348, 1028};   // angle limit (scaled by 0.04375)
 
-      // int linear interpolation: y0 + (x - x0) * (y1 - y0) / (x1 - x0)
-      int numerator = (x - x0) * (y1 - y0);
-      int denominator = x1 - x0;
-      return y0 + numerator / denominator;
-    }
+  const int *values = rateLimit ? values_rate : values_limit;
+
+  // clamp
+  if (x < speeds[0]) x = speeds[0];
+  if (x > speeds[2]) x = speeds[2];
+
+  if (x <= speeds[1]) {
+    return values[0] + (x - speeds[0]) * (values[1] - values[0]) / (speeds[1] - speeds[0]);
+  } else {
+    return values[1] + (x - speeds[1]) * (values[2] - values[1]) / (speeds[2] - speeds[1]);
   }
-  return 0;
 }
 
 void CAN1_RX0_IRQ_Handler(void) {
