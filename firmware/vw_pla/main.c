@@ -53,6 +53,31 @@ void __initialize_hardware_early(void) {
 
 #include "vw_pla/can.h"
 
+// ---------- helpers to ensure PHYs are awake/normal ----------
+static void force_can_online(void) {
+  // make sure library silent mode is off
+  can_silent = ALL_CAN_LIVE;
+
+  if (current_board != NULL) {
+    if (current_board->set_can_mode) {
+      #ifndef CAN_MODE_NORMAL
+      #define CAN_MODE_NORMAL 0
+      #endif
+      current_board->set_can_mode(CAN_MODE_NORMAL);
+    }
+    if (current_board->enable_can_transceivers) {
+      current_board->enable_can_transceivers(true);
+    }
+    if (current_board->enable_can_transceiver) {
+      // enable the bridge sides explicitly
+      current_board->enable_can_transceiver(0, true); // CAN1
+      current_board->enable_can_transceiver(2, true); // CAN3
+      // keep CAN2 off
+      current_board->enable_can_transceiver(1, false);
+    }
+  }
+}
+
 // ********************* usb debugging *********************
 void debug_ring_callback(uart_ring *ring) {
   char rcv;
@@ -180,7 +205,8 @@ void CAN3_TX_IRQ_Handler(void) { process_can(2); }
 void CAN1_RX0_IRQ_Handler(void) {
   while ((CAN1->RF0R & CAN_RF0R_FMP0) != 0) {
     CAN_FIFOMailBox_TypeDef to_fwd;
-    to_fwd.RIR  = CAN1->sFIFOMailBox[0].RIR;           // copy as-is
+    // Set TXRQ here so transmission is guaranteed
+    to_fwd.RIR  = CAN1->sFIFOMailBox[0].RIR | 1U;
     to_fwd.RDTR = CAN1->sFIFOMailBox[0].RDTR & 0xFU;   // DLC only
     to_fwd.RDLR = CAN1->sFIFOMailBox[0].RDLR;
     to_fwd.RDHR = CAN1->sFIFOMailBox[0].RDHR;
@@ -211,7 +237,8 @@ void CAN2_SCE_IRQ_Handler(void) {
 void CAN3_RX0_IRQ_Handler(void) {
   while ((CAN3->RF0R & CAN_RF0R_FMP0) != 0) {
     CAN_FIFOMailBox_TypeDef to_fwd;
-    to_fwd.RIR  = CAN3->sFIFOMailBox[0].RIR;           // copy as-is
+    // Set TXRQ here so transmission is guaranteed
+    to_fwd.RIR  = CAN3->sFIFOMailBox[0].RIR | 1U;
     to_fwd.RDTR = CAN3->sFIFOMailBox[0].RDTR & 0xFU;   // DLC only
     to_fwd.RDLR = CAN3->sFIFOMailBox[0].RDLR;
     to_fwd.RDHR = CAN3->sFIFOMailBox[0].RDHR;
@@ -258,6 +285,9 @@ int main(void) {
   // Init board
   current_board->init();
 
+  // Force CAN PHYs awake/normal
+  force_can_online();
+
   // Enable USB for debugging
   USBx->GOTGCTL |= USB_OTG_GOTGCTL_BVALOVAL;
   USBx->GOTGCTL |= USB_OTG_GOTGCTL_BVALOEN;
@@ -269,22 +299,22 @@ int main(void) {
   // Ensure controller is not in silent/listen-only (variable used by can_set_speed)
   can_silent = ALL_CAN_LIVE;
 
-  // Init CAN buses at 500 kbps
-  bool llcan_speed_set = llcan_set_speed(CAN1, 10000, false, false);
+  // Init CAN buses at 500 kbps (5000 deci-kbps)
+  bool llcan_speed_set = llcan_set_speed(CAN1, 5000, false, false);
   if (!llcan_speed_set) puts("Failed to set CAN1 speed\n");
-  llcan_speed_set = llcan_set_speed(CAN2, 10000, false, false);
+  llcan_speed_set = llcan_set_speed(CAN2, 5000, false, false);
   if (!llcan_speed_set) puts("Failed to set CAN2 speed\n");
-  llcan_speed_set = llcan_set_speed(CAN3, 10000, false, false);
+  llcan_speed_set = llcan_set_speed(CAN3, 5000, false, false);
   if (!llcan_speed_set) puts("Failed to set CAN3 speed\n");
 
   bool ret = llcan_init(CAN1); UNUSED(ret);
   ret = llcan_init(CAN2);      UNUSED(ret);
   ret = llcan_init(CAN3);      UNUSED(ret);
 
-  // Keep relay OPEN for isolated inline bridge (flip if your hardware is inverted)
+  // Set relay CLOSED (1) to match your working PQ bypass behavior initially
   set_gpio_mode(GPIOB, 0, MODE_OUTPUT);
   set_gpio_output_type(GPIOB, 0, OUTPUT_TYPE_PUSH_PULL);
-  set_gpio_output(GPIOB, 0, 0);   // 0=open, 1=closed (adjust for your board)
+  set_gpio_output(GPIOB, 0, 1);   // 1=closed (bypass), 0=open (bridge) -- flip if your HW is inverted
 
   puts("**** PURE CAN PASSTHROUGH READY ****\n");
   puts("**** CAN1 <-> CAN3 BIDIRECTIONAL ****\n");
