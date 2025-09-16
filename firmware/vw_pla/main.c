@@ -270,11 +270,11 @@ int main(void) {
   can_silent = ALL_CAN_LIVE;
 
   // Init CAN buses at 500 kbps
-  bool llcan_speed_set = llcan_set_speed(CAN1, 5000, false, false);
+  bool llcan_speed_set = llcan_set_speed(CAN1, 10000, false, false);
   if (!llcan_speed_set) puts("Failed to set CAN1 speed\n");
-  llcan_speed_set = llcan_set_speed(CAN2, 5000, false, false);
+  llcan_speed_set = llcan_set_speed(CAN2, 10000, false, false);
   if (!llcan_speed_set) puts("Failed to set CAN2 speed\n");
-  llcan_speed_set = llcan_set_speed(CAN3, 5000, false, false);
+  llcan_speed_set = llcan_set_speed(CAN3, 10000, false, false);
   if (!llcan_speed_set) puts("Failed to set CAN3 speed\n");
 
   bool ret = llcan_init(CAN1); UNUSED(ret);
